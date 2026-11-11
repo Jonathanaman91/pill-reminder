@@ -1,0 +1,30 @@
+{
+  "name": "pill-reminder-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "REST API for the Pill Reminder app (CSS3344)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:init": "node src/scripts/initDb.js",
+    "admin:create": "node src/scripts/createAdmin.js",
+    "db:migrate": "node src/scripts/migrate.js",
+    "facilities:import": "node src/scripts/importFacilities.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.5.0",
+    "pg": "^8.16.0",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small notification icon: a capsule tilted 45°. Android shows status-bar
+     icons as white silhouettes, so this uses one flat colour. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:rotation="-45">
+        <!-- left half (solid) -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M11.4,8.5H7.5a3.5,3.5 0,0 0,0 7H11.4z" />
+        <!-- right half (solid, with a small gap so it reads as a capsule) -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M12.6,8.5H16.5a3.5,3.5 0,0 1,0 7H12.6z" />
+    </group>
+</vector>

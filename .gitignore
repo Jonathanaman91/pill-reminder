@@ -1,0 +1,8 @@
+# Never upload passwords or secrets
+.env
+**/.env
+
+# Installed / generated files
+**/node_modules/
+*.apk
+*.aab

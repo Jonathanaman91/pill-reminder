@@ -1,0 +1,54 @@
+name: pill_reminder
+description: Pill Reminder — CSS3344 Mobile Application Development group project.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  # Checked against the current Flutter stable (Dart 3.11). Run `flutter upgrade` if pub complains.
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management (Feature b: BLoC dashboard)
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.7
+
+  # Networking + secure token storage (Feature a: JWT auth)
+  dio: ^5.8.0
+  flutter_secure_storage: ^9.2.4
+
+  # Offline cache (Feature e: SQLite)
+  sqflite: ^2.4.2
+  path: ^1.9.1
+
+  # UI + helpers
+  intl: ^0.20.2
+  shimmer: ^3.0.0
+  uuid: ^4.5.1
+
+  # Camera / gallery photo of the pill bottle (Feature d)
+  image_picker: ^1.1.2
+  path_provider: ^2.1.5
+
+  # Dose alarms (Feature f). 22.x on purpose: 23.x needs Android Gradle
+  # Plugin 9 + compileSdk 37, which newly created Flutter projects don't use yet.
+  flutter_local_notifications: ^22.3.3
+  timezone: ^0.11.0
+  flutter_timezone: ^5.1.1
+
+  # Nearest pharmacy / clinic map (Feature c). flutter_map uses free
+  # OpenStreetMap tiles, so no Google Maps API key or billing is needed.
+  geolocator: ^14.0.2
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

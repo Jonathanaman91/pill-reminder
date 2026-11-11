@@ -1,0 +1,25 @@
+# Render "Blueprint": tells Render how to run the backend.
+# Render → New → Blueprint → pick this GitHub repo. It reads this file.
+services:
+  - type: web
+    name: pill-reminder-api
+    runtime: node
+    plan: free
+    region: singapore           # closest Render region to Malaysia
+    rootDir: backend              # the API lives in the backend/ folder of this repo
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL         # paste your Neon connection string when Render asks
+        sync: false
+      - key: JWT_ACCESS_SECRET    # Render makes a long random secret for you
+        generateValue: true
+      - key: ACCESS_TOKEN_TTL
+        value: 15m
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: "30"
+      - key: CORS_ORIGINS         # add your admin panel's address here later
+        value: http://localhost:5173

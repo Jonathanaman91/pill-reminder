@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds remove resources that the code doesn't seem to use.
+     The notification icon is only referenced by name at run time, so tell
+     the build to keep it — otherwise dose alarms may fail silently.
+     (flutter_local_notifications README → "Release build configuration") -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_pill,@mipmap/ic_launcher" />
