@@ -21,13 +21,16 @@ ThemeData buildAppTheme() {
 
   final base = ThemeData(
     useMaterial3: true,
+    // Named on purpose: phones such as realme or Xiaomi swap in their own
+    // system font, which would mix with Roboto in some widgets.
+    fontFamily: _font,
     colorScheme: scheme,
     scaffoldBackgroundColor: AppColors.background,
   );
 
   // Tight letter-spacing on large text keeps headlines punchy;
   // body text keeps default spacing for readability.
-  const text = TextTheme(
+  final text = const TextTheme(
     displaySmall: TextStyle(
         fontSize: 34, height: 1.1, fontWeight: FontWeight.w700, letterSpacing: -0.8),
     headlineMedium: TextStyle(
@@ -41,7 +44,7 @@ ThemeData buildAppTheme() {
     labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
     labelMedium: TextStyle(
         fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.inkSecondary),
-  );
+  ).apply(fontFamily: _font);
 
   const buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(AppRadius.control)),
@@ -92,6 +95,7 @@ ThemeData buildAppTheme() {
         (s) => s.contains(WidgetState.selected) ? AppColors.ink : AppColors.surface,
       ),
       labelStyle: TextStyle(
+        fontFamily: _font,
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: WidgetStateColor.resolveWith(
@@ -171,6 +175,9 @@ ThemeData buildAppTheme() {
     tooltipTheme: const TooltipThemeData(waitDuration: Duration(milliseconds: 400)),
   );
 }
+
+/// One typeface everywhere (see the comment in [buildAppTheme]).
+const _font = 'Roboto';
 
 OutlineInputBorder _outline(Color color, {double width = 1}) => OutlineInputBorder(
       borderRadius: const BorderRadius.all(Radius.circular(AppRadius.control)),
