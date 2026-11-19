@@ -147,6 +147,14 @@ class AddMedicationCubit extends Cubit<AddMedicationState> {
     return null;
   }
 
+  /// Changes one reminder time. Returns a message if it can't, otherwise null.
+  String? replaceTime(ClockTime old, ClockTime next) {
+    if (old == next) return null;
+    if (state.times.contains(next)) return '${next.hhmm} is already in the list.';
+    emit(state.copyWith(times: [...state.times.where((t) => t != old), next]..sort()));
+    return null;
+  }
+
   void removeTime(ClockTime time) =>
       emit(state.copyWith(times: state.times.where((t) => t != time).toList()));
 

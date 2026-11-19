@@ -12,6 +12,7 @@ import '../bloc/add_medication_cubit.dart';
 import '../data/medication_repository.dart';
 import '../domain/medication.dart';
 import 'widgets/photo_slot.dart';
+import 'widgets/time_wheel_sheet.dart';
 
 /// The medication form. With no [medication] it adds a new one; with a saved
 /// [medication] it opens filled in, and Save asks before changing it.
@@ -162,22 +163,34 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
   // Times and dates
   // ---------------------------------------------------------------------------
 
+  /// Hour and minute wheels, like the phone's alarm clock.
+  Future<ClockTime?> _pickTime(ClockTime initial, {required String confirmLabel}) {
+    final s = _cubit.state;
+    return showTimeWheelSheet(
+      context,
+      initial: initial,
+      daysMask: s.daysMask,
+      startDate: s.startDate,
+      confirmLabel: confirmLabel,
+    );
+  }
+
   Future<void> _addTime() async {
     final last = _cubit.state.times.isEmpty ? null : _cubit.state.times.last;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: last == null
-          ? const TimeOfDay(hour: 8, minute: 0)
-          : TimeOfDay(hour: (last.hour + 4) % 24, minute: last.minute),
-      helpText: 'Reminder time',
-      // The app shows times as 08:00, so pick them the same way.
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-        child: child!,
-      ),
-    );
+    // Suggest 08:00 first, then 4 hours after the latest time.
+    final suggestion =
+        last == null ? const ClockTime(8, 0) : ClockTime((last.hour + 4) % 24, last.minute);
+    final picked = await _pickTime(suggestion, confirmLabel: 'Add');
     if (picked == null) return;
-    final problem = _cubit.addTime(ClockTime(picked.hour, picked.minute));
+    final problem = _cubit.addTime(picked);
+    if (problem != null) _toast(problem);
+  }
+
+  /// Tapping a time chip opens the wheels to change it.
+  Future<void> _changeTime(ClockTime current) async {
+    final picked = await _pickTime(current, confirmLabel: 'Change');
+    if (picked == null) return;
+    final problem = _cubit.replaceTime(current, picked);
     if (problem != null) _toast(problem);
   }
 
@@ -389,6 +402,8 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
                     for (final t in state.times)
                       InputChip(
                         label: Text(t.hhmm, style: text.titleSmall?.tabular),
+                        onPressed: () => _changeTime(t),
+                        tooltip: 'Change ${t.hhmm}',
                         onDeleted: () => _cubit.removeTime(t),
                         deleteIcon: const Icon(Icons.close_rounded, size: 18),
                         deleteButtonTooltipMessage: 'Remove ${t.hhmm}',
