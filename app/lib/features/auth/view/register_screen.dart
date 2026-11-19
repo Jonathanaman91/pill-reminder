@@ -9,22 +9,28 @@ import '../../../core/widgets/waiting_hint.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_form_cubit.dart';
 import '../data/auth_repository.dart';
+import 'login_screen.dart';
 import 'widgets/auth_widgets.dart';
 
 class RegisterScreen extends StatelessWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.fromGuest = false});
+
+  /// Opened by a guest: what they saved on this phone moves into the account.
+  final bool fromGuest;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => AuthFormCubit(context.read<AuthRepository>()),
-      child: const _RegisterForm(),
+      child: _RegisterForm(fromGuest: fromGuest),
     );
   }
 }
 
 class _RegisterForm extends StatefulWidget {
-  const _RegisterForm();
+  const _RegisterForm({required this.fromGuest});
+
+  final bool fromGuest;
 
   @override
   State<_RegisterForm> createState() => _RegisterFormState();
@@ -59,7 +65,10 @@ class _RegisterFormState extends State<_RegisterForm> {
     if (user != null && mounted) {
       TextInput.finishAutofillContext();
       // AuthGate closes this screen and shows the dashboard.
-      context.read<AuthBloc>().add(AuthLoggedIn(user, notice: 'Account created'));
+      context.read<AuthBloc>().add(AuthLoggedIn(user,
+          notice: widget.fromGuest
+              ? 'Account created · your medications are now backed up'
+              : 'Account created'));
     }
   }
 
@@ -71,8 +80,11 @@ class _RegisterFormState extends State<_RegisterForm> {
     return AuthLayout(
       showBack: true,
       title: 'Create your account',
-      subtitle: 'Your medications are backed up to your account, so you can '
-          'get them back on a new phone.',
+      subtitle: widget.fromGuest
+          ? 'The medications on this phone move into your new account, so '
+              'you can get them back on a new phone.'
+          : 'Your medications are backed up to your account, so you can '
+              'get them back on a new phone.',
       children: [
         AutofillGroup(
           child: Form(
@@ -136,7 +148,14 @@ class _RegisterFormState extends State<_RegisterForm> {
         WaitingHint(active: form.submitting),
         const SizedBox(height: AppSpace.sm),
         TextButton(
-          onPressed: form.submitting ? null : () => Navigator.of(context).pop(),
+          onPressed: form.submitting
+              ? null
+              : widget.fromGuest
+                  // Opened from the dashboard: swap to the login form instead
+                  // of going back to the dashboard.
+                  ? () => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+                      builder: (_) => const LoginScreen(fromGuest: true)))
+                  : () => Navigator.of(context).pop(),
           child: const Text('I already have an account'),
         ),
       ],

@@ -15,7 +15,13 @@
     <application
         android:label="Pill Reminder"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
+        <!-- No Android backup: the login tokens are encrypted with a key that
+             never leaves this phone, so a restored backup can't be read and
+             would leave the app stuck on a blank screen. The schedule comes
+             back from the server after logging in anyway. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

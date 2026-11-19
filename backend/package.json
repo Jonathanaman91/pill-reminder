@@ -11,7 +11,8 @@
     "db:init": "node src/scripts/initDb.js",
     "admin:create": "node src/scripts/createAdmin.js",
     "db:migrate": "node src/scripts/migrate.js",
-    "facilities:import": "node src/scripts/importFacilities.js"
+    "facilities:import": "node src/scripts/importFacilities.js",
+    "catalog:seed": "node src/scripts/seedCatalog.js"
   },
   "engines": {
     "node": ">=20"

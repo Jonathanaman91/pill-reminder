@@ -10,7 +10,14 @@ import '../domain/today_dose.dart';
 import 'dashboard_local_source.dart';
 import 'dashboard_remote_source.dart';
 
-enum SyncOutcome { synced, offline, failed }
+enum SyncOutcome {
+  synced,
+  offline,
+  failed,
+
+  /// Guest mode: there is no account to sync with, so nothing was sent.
+  localOnly,
+}
 
 /// The only thing the DashboardBloc talks to. The BLoC never knows whether
 /// data came from SQLite or the API — that is the repository's job.
@@ -53,10 +60,12 @@ class OfflineFirstDashboardRepository implements DashboardRepository {
     required DashboardLocalSource local,
     required DashboardRemoteSource remote,
     List<SyncPusher> pushers = const [],
+    Future<bool> Function()? hasAccount,
     DateTime Function()? clock,
   })  : _local = local,
         _remote = remote,
         _pushers = pushers,
+        _hasAccount = hasAccount,
         _clock = clock ?? DateTime.now {
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _notify(dataChanged: false));
   }
@@ -64,6 +73,7 @@ class OfflineFirstDashboardRepository implements DashboardRepository {
   final DashboardLocalSource _local;
   final DashboardRemoteSource _remote;
   final List<SyncPusher> _pushers;
+  final Future<bool> Function()? _hasAccount;
   final DateTime Function() _clock;
   final _changes = StreamController<void>.broadcast();
   final _dataChanges = StreamController<void>.broadcast();
@@ -147,6 +157,13 @@ class OfflineFirstDashboardRepository implements DashboardRepository {
   }
 
   Future<SyncOutcome> _runSync() async {
+    // Guest mode: keep every change on this phone. The pending rows wait in
+    // the outbox and are uploaded if the guest later creates an account.
+    final hasAccount = _hasAccount;
+    if (hasAccount != null && !await hasAccount()) {
+      _notify();
+      return SyncOutcome.localOnly;
+    }
     try {
       // 1. Push first, so the server's answer already includes our changes.
       //    Medications go before dose logs, which point to them.

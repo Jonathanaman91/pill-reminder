@@ -43,6 +43,9 @@ class DemoAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthUser> continueAsGuest() async => _user = AuthUser.guest;
+
+  @override
   Future<void> logOut() async {
     _user = null;
   }

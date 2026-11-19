@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_tokens.dart';
 import '../dashboard/view/dashboard_screen.dart';
 import '../facilities/view/nearby_screen.dart';
+import '../medications/view/medications_screen.dart';
 
-/// Two tabs: Today (the dose dashboard) and Nearby (pharmacies & clinics).
+/// Three tabs: Today (the dose dashboard), Medications (edit or delete what
+/// is saved) and Nearby (pharmacies & clinics).
 ///
 /// IndexedStack keeps each tab alive when switching, so the dashboard
-/// doesn't reload. The Nearby tab is only built the first time it's opened,
-/// so the app never asks for location until the user wants the map.
+/// doesn't reload. The other tabs are only built the first time they're
+/// opened, so the app never asks for location until the user wants the map.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.onAddMedication, required this.onOpenAccount});
 
@@ -42,7 +44,11 @@ class _HomeShellState extends State<HomeShell> {
                   onAddMedication: widget.onAddMedication,
                   onOpenAccount: widget.onOpenAccount,
                 ),
-                if (_opened.contains(1)) const NearbyScreen() else const SizedBox.shrink(),
+                if (_opened.contains(1))
+                  MedicationsScreen(onAddMedication: widget.onAddMedication)
+                else
+                  const SizedBox.shrink(),
+                if (_opened.contains(2)) const NearbyScreen() else const SizedBox.shrink(),
               ],
               ),
             ),
@@ -55,6 +61,7 @@ class _HomeShellState extends State<HomeShell> {
             }),
             destinations: const [
               NavigationDestination(icon: Icon(Icons.today_rounded), label: 'Today'),
+              NavigationDestination(icon: Icon(Icons.medication_rounded), label: 'Medications'),
               NavigationDestination(icon: Icon(Icons.local_pharmacy_rounded), label: 'Nearby'),
             ],
           ),

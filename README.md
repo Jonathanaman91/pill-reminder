@@ -6,8 +6,8 @@ REST API and a React web admin panel.
 ```
 pill-reminder/
 ├── app/       Flutter Android app      (done: all 6 features)
-├── backend/   Express REST API         (done: auth, sync, medications, photos, nearby places)
-└── admin/     React + Vite web admin   (later step)
+├── backend/   Express REST API         (done: auth, sync, medications, photos, nearby places, admin)
+└── admin/     React + Vite web admin   (done: users, global medication database, activity log)
 ```
 
 ## 1. Run the app with demo data (no backend needed)
@@ -213,6 +213,50 @@ tag in `android/app/src/debug/AndroidManifest.xml`. For the release APK use
 HTTPS, and make sure `<uses-permission android:name="android.permission.INTERNET"/>`
 is in `android/app/src/main/AndroidManifest.xml`.
 
+## 4. Run the web admin panel
+
+The backend must be running first (section 2), and you need an admin account
+(`npm run admin:create …` in `backend/`).
+
+```bash
+cd backend
+npm run catalog:seed          # optional: 15 common medications, so the list is not empty
+cd ../admin
+npm install
+npm run dev                   # http://localhost:5173
+```
+
+Sign in with the admin email and password. A normal user's login is refused
+with "This account is not an admin."
+
+To point the panel at the live server instead of your laptop, copy
+`admin/.env.example` to `admin/.env.local` and set `VITE_API_BASE_URL`. The
+server only accepts browsers from the addresses in its `CORS_ORIGINS` setting.
+
+| Page | What an admin can do |
+|---|---|
+| **Overview** | Accounts, suspended accounts, size of the medication database, doses taken in the last 7 days, latest changes |
+| **Users** | Search and filter; edit a name; make someone an admin; suspend or reactivate; sign a user out of every device; delete an account |
+| **Medications** | The global medication database: add, edit, hide from users, delete; search by generic or brand name; filter by form |
+| **Activity** | Every change made in the panel: who, what and when (`admin_audit_logs`) |
+
+### How the admin panel stays safe
+
+- Every `/admin` request checks the database, not only the token, so an admin
+  who is demoted or suspended loses access at once (the token alone would
+  keep saying "admin" for up to 15 minutes).
+- An admin cannot suspend, demote or delete their own account, so there is
+  always at least one working admin.
+- Suspending a user ends all their sessions. The phone returns to the login
+  screen at its next token refresh (15 minutes at most).
+- Admins see how many medications and doses a user has, never the medication
+  names, because that is health information the job does not need.
+- Every change is written to the audit trail in the same database
+  transaction, so a change can never happen without its record. An admin who
+  already has records cannot be deleted, only suspended.
+- In the browser, the access token lives only in memory and the refresh token
+  in `sessionStorage`: a page reload stays signed in, closing the tab signs out.
+
 ## API so far
 
 | Method | Path | Auth | Purpose |
@@ -227,11 +271,66 @@ is in `android/app/src/main/AndroidManifest.xml`.
 | `POST` | `/api/v1/medications/batch` | Bearer | Upload medications + their times saved offline (safe to resend) |
 | `POST` | `/api/v1/medications/:id/photo` | Bearer | Multipart field `photo`: JPEG/PNG/WebP, max 5 MB |
 | `GET`  | `/uploads/<file>` | — | Uploaded pill-bottle photos |
-| `GET`  | `/api/v1/facilities/nearby?lat=&lng=&radius=` | Bearer | Pharmacies, clinics and hospitals nearby (OpenStreetMap + admin-added), nearest first |
+| `GET`  | `/api/v1/facilities/nearby?lat=&lng=&radius=` | — (60 per 10 min per IP) | Pharmacies, clinics and hospitals nearby (OpenStreetMap + admin-added), nearest first |
+| `GET`  | `/api/v1/admin/overview` | Admin | Totals for the admin panel's first screen |
+| `GET`  | `/api/v1/admin/users?search=&status=&role=&page=` | Admin | Users, newest first, 20 per page |
+| `GET`  | `/api/v1/admin/users/:id` | Admin | One user with counts (medications, sessions, doses) |
+| `PATCH` | `/api/v1/admin/users/:id` | Admin | `{fullName?, role?, status?}`: edit, promote, suspend, reactivate |
+| `POST` | `/api/v1/admin/users/:id/sign-out` | Admin | End every session of that user |
+| `DELETE` | `/api/v1/admin/users/:id` | Admin | Delete the account and all its data → 204 |
+| `GET`  | `/api/v1/admin/catalog?search=&form=&status=&page=` | Admin | Global medication database |
+| `POST` | `/api/v1/admin/catalog` | Admin | Add a medication (409 if it already exists) |
+| `PUT`  | `/api/v1/admin/catalog/:id` | Admin | Replace a medication's details, or hide it (`isActive: false`) |
+| `DELETE` | `/api/v1/admin/catalog/:id` | Admin | Delete a medication → 204 |
+| `GET`  | `/api/v1/admin/activity?page=` | Admin | Audit trail, newest first |
+
+"Admin" means a Bearer token whose user is an active admin; anyone else gets 403.
 
 Errors always look like `{"error": "message", "fields": {"email": "message"}}`.
 Status codes: 401 not logged in / wrong password, 403 suspended, 409 email
 taken, 422 invalid fields.
+
+### Guest mode (no account)
+
+- On the login screen, **Continue without an account** → confirm. The app
+  opens straight to the dashboard and remembers guest mode after a restart.
+- Everything works on the phone: adding, editing and deleting medications,
+  marking doses and reminders. **Nearby** works too.
+- Nothing is sent to the server, so there is nothing to back up: losing or
+  resetting the phone loses the data. The dashboard says
+  "Guest · saved on this phone only", and there is no streak (the server
+  works it out).
+- Account (person icon) → **Create an account** or **I already have an
+  account**: what the guest saved stays and is uploaded to that account.
+- Account → **Delete guest data** (confirmed) wipes the phone and returns to
+  the login screen.
+- Guests are not users on the server, so they don't appear in the admin panel.
+
+### Confirmations (two steps for anything easy to do by accident)
+
+| Action | First tap | Second step |
+|---|---|---|
+| Mark a dose as taken | The circle on a dose row, or **Mark as taken** | "Mark as taken?" with the medication, time and dose |
+| Skip a dose | **Skip** | "Skip this dose?" |
+| Edit a medication | **Medications** tab → a row (or ⋮ → Edit) → **Save changes** | "Save changes?" |
+| Delete a medication | **Medications** tab → ⋮ → Delete | "Delete Metformin?" (cannot be undone) |
+
+Tapping outside a dialog or pressing Back never confirms. A taken or skipped
+dose can still be undone from the snack bar or by tapping its tick. The
+**Mark as taken** button on a notification stays one tap, because pressing a
+button on an alert is already a deliberate act.
+
+### How editing and deleting work offline
+
+- Both are saved on the phone first and uploaded at the next sync, like adding.
+- **Edit:** a reminder time that stays keeps its history, so a dose already
+  taken today stays taken. A removed time disappears from the schedule; a new
+  time gets its own reminders.
+- **Delete:** the medication leaves the Today list and its alarms are
+  cancelled at once. The phone keeps a hidden "deleted" row until the server
+  has been told, so a delete made with no signal is never lost. After the
+  sync it also disappears from the user's other devices.
+- A saved photo can be replaced, not removed.
 
 ### How "Add medication" works offline
 

@@ -15,7 +15,9 @@ class AppDatabase {
 
   static const _name = 'pill_reminder.db';
   // v2: medications.local_photo_path (photo kept on the phone until uploaded)
-  static const _version = 2;
+  // v3: medications.deleted + schedules.deleted (a delete made on this phone,
+  //     kept until the server has been told about it)
+  static const _version = 3;
 
   static Future<AppDatabase> open() async {
     final dir = await getDatabasesPath();
@@ -45,6 +47,10 @@ class AppDatabase {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE medications ADD COLUMN local_photo_path TEXT');
     }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE medications ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE schedules ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   static Future<void> _create(Database db, int version) async {
@@ -63,6 +69,7 @@ class AppDatabase {
           end_date       TEXT,                   -- yyyy-MM-dd or NULL
           is_active      INTEGER NOT NULL DEFAULT 1,
           updated_at     TEXT NOT NULL,
+          deleted        INTEGER NOT NULL DEFAULT 0, -- deleted here, not uploaded yet
           sync_state     TEXT NOT NULL DEFAULT 'synced'
         )''')
       ..execute('''
@@ -73,6 +80,7 @@ class AppDatabase {
           days_mask      INTEGER NOT NULL,       -- Mon=1 … Sun=64
           quantity       REAL NOT NULL DEFAULT 1,
           updated_at     TEXT NOT NULL,
+          deleted        INTEGER NOT NULL DEFAULT 0,
           sync_state     TEXT NOT NULL DEFAULT 'synced'
         )''')
       ..execute('CREATE INDEX idx_schedules_med ON schedules(medication_id)')

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { query } from '../db.js';
 import { HttpError } from '../errors.js';
-import { requireAuth } from '../middleware/auth.js';
+import { limitPerIp } from '../middleware/rateLimit.js';
 import { saveOsmPlaces } from '../services/facilityStore.js';
 import { distanceMeters, fetchNearby } from '../services/overpass.js';
 
@@ -31,7 +31,12 @@ const ENOUGH_SAVED = 5;
  *    If the live search fails, the saved places are still returned (`partial`
  *    is true only when nothing at all could be found).
  */
-facilitiesRouter.get('/facilities/nearby', requireAuth, async (req, res) => {
+// Open without logging in, so the app's guest mode can find a pharmacy too.
+// The places are public map data; the limit stops anyone hammering the free
+// OpenStreetMap servers through us.
+const nearbyLimit = limitPerIp({ max: 60, windowMs: 10 * 60_000 });
+
+facilitiesRouter.get('/facilities/nearby', nearbyLimit, async (req, res) => {
   const parsed = nearbyQuery.safeParse(req.query);
   if (!parsed.success) throw new HttpError(422, 'lat and lng must be valid coordinates.');
   const { lat, lng, radius } = parsed.data;

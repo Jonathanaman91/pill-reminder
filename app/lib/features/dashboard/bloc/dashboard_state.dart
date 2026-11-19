@@ -11,7 +11,15 @@ enum DashboardStatus {
   failure,
 }
 
-enum SyncIndicator { idle, syncing, offline, error }
+enum SyncIndicator {
+  idle,
+  syncing,
+  offline,
+  error,
+
+  /// Guest mode: saved on this phone only.
+  localOnly,
+}
 
 /// A one-time message for the snack bar. Each one gets a new [id], so the
 /// same text shown twice still counts as a new message.

@@ -36,6 +36,11 @@ final class AuthLogoutRequested extends AuthEvent {
   const AuthLogoutRequested();
 }
 
+/// "Continue without an account" on the login screen.
+final class AuthGuestRequested extends AuthEvent {
+  const AuthGuestRequested();
+}
+
 final class _AuthSessionExpired extends AuthEvent {
   const _AuthSessionExpired();
 }
@@ -77,6 +82,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthStarted>(_onStarted);
     on<AuthLoggedIn>(_onLoggedIn);
     on<AuthLogoutRequested>(_onLogoutRequested);
+    on<AuthGuestRequested>(_onGuestRequested);
     on<_AuthSessionExpired>(_onSessionExpired);
 
     _expiredSub = _repository.sessionExpired.listen((_) => add(const _AuthSessionExpired()));
@@ -87,7 +93,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   int _noticeSeq = 0;
 
   Future<void> _onStarted(AuthStarted event, Emitter<AuthState> emit) async {
-    final user = await _repository.restoreSession();
+    // Whatever goes wrong while reading the saved session, the app must leave
+    // the blank start-up screen: the worst case is the login screen.
+    AuthUser? user;
+    try {
+      user = await _repository.restoreSession();
+    } catch (_) {
+      user = null;
+    }
     emit(AuthState(
       status: user == null ? AuthStatus.unauthenticated : AuthStatus.authenticated,
       user: user,
@@ -103,8 +116,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLogoutRequested(AuthLogoutRequested event, Emitter<AuthState> emit) async {
+    final wasGuest = state.user?.isGuest ?? false;
     await _repository.logOut();
-    emit(const AuthState(status: AuthStatus.unauthenticated));
+    emit(AuthState(
+      status: AuthStatus.unauthenticated,
+      notice: wasGuest ? AuthNotice(++_noticeSeq, 'Guest data deleted from this phone') : null,
+    ));
+  }
+
+  Future<void> _onGuestRequested(AuthGuestRequested event, Emitter<AuthState> emit) async {
+    try {
+      final guest = await _repository.continueAsGuest();
+      emit(AuthState(status: AuthStatus.authenticated, user: guest));
+    } catch (_) {
+      emit(AuthState(
+        status: AuthStatus.unauthenticated,
+        notice: AuthNotice(++_noticeSeq, 'Couldn’t start guest mode. Please try again.'),
+      ));
+    }
   }
 
   Future<void> _onSessionExpired(_AuthSessionExpired event, Emitter<AuthState> emit) async {

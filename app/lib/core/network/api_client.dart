@@ -21,9 +21,26 @@ class TokenStorage {
   /// log in again (password changed, session revoked by an admin, 30 days passed).
   Stream<void> get sessionExpired => _expired.stream;
 
-  Future<String?> readAccessToken() => _storage.read(key: _accessKey);
-  Future<String?> readRefreshToken() => _storage.read(key: _refreshKey);
-  Future<String?> readUserJson() => _storage.read(key: _userKey);
+  Future<String?> readAccessToken() => _read(_accessKey);
+  Future<String?> readRefreshToken() => _read(_refreshKey);
+  Future<String?> readUserJson() => _read(_userKey);
+
+  /// Some phones cannot decrypt what was saved before, e.g. after Android
+  /// restored an old backup of the app whose encryption key no longer exists.
+  /// Reading then throws instead of returning null. Treat that as "no saved
+  /// session": wipe the unreadable values so the user simply logs in again.
+  Future<String?> _read(String key) async {
+    try {
+      return await _storage.read(key: key).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      try {
+        await _storage.deleteAll();
+      } catch (_) {
+        // Nothing else to try; the login screen still works.
+      }
+      return null;
+    }
+  }
 
   Future<void> save({required String accessToken, required String refreshToken}) async {
     await _storage.write(key: _accessKey, value: accessToken);

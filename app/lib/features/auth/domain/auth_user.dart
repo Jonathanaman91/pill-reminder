@@ -8,6 +8,12 @@ class AuthUser extends Equatable {
     this.role = 'user',
   });
 
+  /// Someone using the app without an account. Everything they add stays in
+  /// this phone's database and is never sent to the server, until they
+  /// create an account or log in (then it is uploaded to that account).
+  static const guest = AuthUser(id: guestId, email: '', fullName: 'Guest', role: 'guest');
+  static const guestId = 'guest';
+
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
         id: json['id'] as String,
         email: json['email'] as String,
@@ -19,6 +25,8 @@ class AuthUser extends Equatable {
   final String email;
   final String fullName;
   final String role;
+
+  bool get isGuest => id == guestId;
 
   String get firstName => fullName.trim().split(RegExp(r'\s+')).first;
 

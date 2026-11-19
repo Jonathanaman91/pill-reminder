@@ -21,6 +21,19 @@ final class AddMedicationState extends Equatable {
   })  : unit = unit ?? form.units.first,
         startDate = startDate ?? _today();
 
+  /// The form filled in with a saved medication, ready to be edited.
+  factory AddMedicationState.from(Medication m) => AddMedicationState(
+        photoPath: m.photo,
+        form: m.form,
+        unit: m.dosageUnit,
+        quantity: m.quantity,
+        times: m.times,
+        everyDay: m.daysMask == WeekDays.everyDay,
+        customDays: m.daysMask == WeekDays.everyDay ? _weekdays : m.daysMask,
+        startDate: m.startDate,
+        endDate: m.endDate,
+      );
+
   static const _weekdays = 31; // Mon–Fri
   static DateTime _today() {
     final n = DateTime.now();
@@ -86,12 +99,26 @@ final class AddMedicationState extends Equatable {
         startDate, endDate, showErrors, submitting, saveError];
 }
 
-/// ViewModel for the Add Medication screen. Text boxes live in the widget
+/// ViewModel for the medication form, which both adds a new medication and
+/// edits a saved one ([editing]). Text boxes live in the widget
 /// (TextEditingControllers); everything else lives here.
 class AddMedicationCubit extends Cubit<AddMedicationState> {
-  AddMedicationCubit(this._repository) : super(AddMedicationState());
+  AddMedicationCubit(this._repository, {Medication? editing})
+      : _editing = editing,
+        super(editing == null ? AddMedicationState() : AddMedicationState.from(editing)) {
+    _initial = state;
+  }
 
   final MedicationRepository _repository;
+  final Medication? _editing;
+  late final AddMedicationState _initial;
+
+  bool get isEditing => _editing != null;
+
+  /// True once any choice (photo, form, times, days, dates…) differs from
+  /// what the form opened with. Text boxes are compared by the screen.
+  bool get choicesChanged =>
+      state.copyWith(showErrors: false, submitting: false, saveError: () => null) != _initial;
 
   static const maxTimes = 12;
   static const minQuantity = 0.5;
@@ -143,7 +170,7 @@ class AddMedicationCubit extends Cubit<AddMedicationState> {
     if (state.submitting || !state.choicesValid) return false;
     emit(state.copyWith(submitting: true, saveError: () => null));
     try {
-      await _repository.add(NewMedication(
+      final medication = NewMedication(
         name: name.trim(),
         form: state.form,
         dosageAmount: strength,
@@ -155,7 +182,13 @@ class AddMedicationCubit extends Cubit<AddMedicationState> {
         endDate: state.endDate,
         instructions: (instructions?.trim().isEmpty ?? true) ? null : instructions!.trim(),
         photoPath: state.photoPath,
-      ));
+      );
+      final editing = _editing;
+      if (editing == null) {
+        await _repository.add(medication);
+      } else {
+        await _repository.update(editing.id, medication);
+      }
       emit(state.copyWith(submitting: false));
       return true;
     } catch (_) {

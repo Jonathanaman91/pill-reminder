@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/message_view.dart';
 import '../../reminders/view/reminder_banner.dart';
 import '../bloc/dashboard_bloc.dart';
@@ -135,7 +137,23 @@ class _DashboardContent extends StatelessWidget {
     final isEmpty = snapshot.total == 0;
     final text = Theme.of(context).textTheme;
 
-    void take(TodayDose d) => bloc.add(DoseStatusChanged(d, DoseStatus.taken));
+    // Two steps on purpose: the tap asks, the dialog confirms. One stray tap
+    // while scrolling can no longer tick a dose, or a whole row of them.
+    Future<void> record(TodayDose d, DoseStatus status) async {
+      final taking = status == DoseStatus.taken;
+      final isLate = d.status == DoseStatus.missed;
+      final confirmed = await showConfirmDialog(
+        context,
+        title: taking ? 'Mark as taken?' : 'Skip this dose?',
+        message: '${d.name} · ${DateFormat.Hm().format(d.scheduledAt)}\n${d.detailLabel}',
+        confirmLabel: taking ? (isLate ? 'Mark as taken late' : 'Mark as taken') : 'Skip dose',
+        cancelLabel: 'Not yet',
+        style: taking ? ConfirmStyle.primary : ConfirmStyle.neutral,
+      );
+      if (confirmed) bloc.add(DoseStatusChanged(d, status));
+    }
+
+    void take(TodayDose d) => record(d, DoseStatus.taken);
     void undo(TodayDose d) => bloc.add(DoseUndoRequested(d));
 
     return RefreshIndicator(
@@ -167,7 +185,7 @@ class _DashboardContent extends StatelessWidget {
                     now: snapshot.now,
                     busy: state.isBusy(next),
                     onTake: () => take(next),
-                    onSkip: () => bloc.add(DoseStatusChanged(next, DoseStatus.skipped)),
+                    onSkip: () => record(next, DoseStatus.skipped),
                   ),
                 ],
               ],

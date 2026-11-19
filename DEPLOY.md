@@ -94,6 +94,30 @@ The first request after 15 idle minutes takes up to a minute (the app shows
 
 One always-awake service uses ~720 of Render's 750 free hours a month.
 
+## 7. Put the admin panel online
+
+`render.yaml` also describes a second, free service: `pill-reminder-admin`,
+a static site built from the `admin` folder.
+
+1. Commit and **Push origin** in GitHub Desktop.
+2. Render → **Blueprints** → your blueprint → **Manual sync** (or approve the
+   sync it offers). It creates `pill-reminder-admin` and updates the API's
+   `CORS_ORIGINS`.
+3. Check both addresses match what Render really gave you (it adds letters if
+   a name is taken). If they differ, fix them in `render.yaml` and push again:
+   - `VITE_API_BASE_URL` = the API's address + `/api/v1`
+   - `CORS_ORIGINS` = contains the admin panel's address, with no `/` at the end
+4. Fill the medication database once (same Terminal trick as step 3):
+
+   ```powershell
+   $env:DATABASE_URL = "paste-the-Neon-string-here"
+   npm run catalog:seed
+   Remove-Item Env:DATABASE_URL
+   ```
+
+5. Open the admin panel's address and sign in with the admin account from
+   step 3. The first sign-in after a quiet spell waits for the API to wake.
+
 ## Troubleshooting
 
 | You see | Fix |
@@ -102,4 +126,6 @@ One always-awake service uses ~720 of Render's 750 free hours a month.
 | Render log: `Missing environment variable DATABASE_URL` | Service → **Environment** → add it → **Save** |
 | Render log: `password authentication failed` | Copy the Neon string again (Neon → Connect) |
 | App: "Couldn't reach the server" | Open the health address in the phone's browser; check the APK was built with the right address (`/api/v1` at the end) |
+| Admin panel: "Couldn't reach the server" on sign-in, API health page works | The panel's address is missing from the API's `CORS_ORIGINS`, or `VITE_API_BASE_URL` is wrong (changing it needs a new deploy of the admin site) |
+| Admin panel: "This account is not an admin." | Run `npm run admin:create` against Neon for that email (step 3) |
 | Nearby shows nothing | Run the Sarawak import against Neon (step 3) |

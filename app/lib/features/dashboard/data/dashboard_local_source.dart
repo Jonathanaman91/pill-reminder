@@ -77,6 +77,7 @@ class DashboardLocalSource {
       FROM schedules s
       JOIN medications m ON m.id = s.medication_id
       WHERE m.is_active = 1
+        AND m.deleted = 0 AND s.deleted = 0
         AND m.start_date <= ?
         AND (m.end_date IS NULL OR m.end_date >= ?)
         AND (s.days_mask & ?) != 0

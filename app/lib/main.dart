@@ -59,6 +59,8 @@ Future<void> main() async {
     dashboardRepository = OfflineFirstDashboardRepository(
       local: DashboardLocalSource(database),
       remote: DashboardRemoteSource(api.dio),
+      // No refresh token = guest mode: nothing to sync with.
+      hasAccount: () async => await tokens.readRefreshToken() != null,
       // Upload new medications (and their photos) before dose logs.
       pushers: [
         MedicationSyncPusher(local: medicationLocal, remote: MedicationRemoteSource(api.dio)),

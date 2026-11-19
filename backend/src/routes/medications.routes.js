@@ -36,7 +36,12 @@ const medicationSchema = z
     endDate: isoDate.nullish(),
     isActive: z.boolean().default(true),
     deleted: z.boolean().default(false),
-    schedules: z.array(scheduleSchema).max(12, 'Up to 12 times a day.'),
+    // Includes times the user removed (deleted: true), so allow more than 12 rows.
+    schedules: z.array(scheduleSchema).max(60),
+  })
+  .refine((m) => m.schedules.filter((s) => !s.deleted).length <= 12, {
+    message: 'Up to 12 times a day.',
+    path: ['schedules'],
   })
   .refine((m) => !m.endDate || m.endDate >= m.startDate, {
     message: 'End date cannot be before the start date.',

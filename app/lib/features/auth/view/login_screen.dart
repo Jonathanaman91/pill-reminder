@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/validation/validators.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/submit_button.dart';
 import '../../../core/widgets/waiting_hint.dart';
 import '../bloc/auth_bloc.dart';
@@ -13,19 +14,25 @@ import 'register_screen.dart';
 import 'widgets/auth_widgets.dart';
 
 class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.fromGuest = false});
+
+  /// Opened by a guest from the account sheet: has a back button, no guest
+  /// option, and keeps the medications already on this phone.
+  final bool fromGuest;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => AuthFormCubit(context.read<AuthRepository>()),
-      child: const _LoginForm(),
+      child: _LoginForm(fromGuest: fromGuest),
     );
   }
 }
 
 class _LoginForm extends StatefulWidget {
-  const _LoginForm();
+  const _LoginForm({required this.fromGuest});
+
+  final bool fromGuest;
 
   @override
   State<_LoginForm> createState() => _LoginFormState();
@@ -55,13 +62,38 @@ class _LoginFormState extends State<_LoginForm> {
         .logIn(email: _email.text, password: _password.text);
     if (user != null && mounted) {
       TextInput.finishAutofillContext(); // offers to save the password
-      context.read<AuthBloc>().add(AuthLoggedIn(user));
+      context.read<AuthBloc>().add(AuthLoggedIn(user,
+          notice: widget.fromGuest
+              ? 'Logged in · the medications on this phone were added to your account'
+              : null));
     }
   }
 
   // AuthRepository and AuthBloc sit above MaterialApp, so every route sees them.
-  void _openRegister() => Navigator.of(context)
-      .push(MaterialPageRoute<void>(builder: (_) => const RegisterScreen()));
+  void _openRegister() {
+    final route = MaterialPageRoute<void>(
+        builder: (_) => RegisterScreen(fromGuest: widget.fromGuest));
+    // A guest swaps between the two forms instead of stacking them up.
+    widget.fromGuest
+        ? Navigator.of(context).pushReplacement(route)
+        : Navigator.of(context).push(route);
+  }
+
+  /// Second step: guest mode keeps nothing on the server, so say so first.
+  Future<void> _continueAsGuest() async {
+    final auth = context.read<AuthBloc>();
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Use without an account?',
+      message: 'Your medications and reminders are saved on this phone only. '
+          'If the phone is lost, reset or the app is removed, they are gone.\n\n'
+          'You can create an account later to back them up.',
+      confirmLabel: 'Continue as guest',
+      cancelLabel: 'Go back',
+      style: ConfirmStyle.neutral,
+    );
+    if (confirmed) auth.add(const AuthGuestRequested());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,9 +101,12 @@ class _LoginFormState extends State<_LoginForm> {
     final cubit = context.read<AuthFormCubit>();
 
     return AuthLayout(
+      showBack: widget.fromGuest,
       title: 'Log in',
-      subtitle: 'Your schedule is saved on this phone, so reminders keep '
-          'working when you have no signal.',
+      subtitle: widget.fromGuest
+          ? 'The medications on this phone will be added to your account.'
+          : 'Your schedule is saved on this phone, so reminders keep '
+              'working when you have no signal.',
       children: [
         AutofillGroup(
           child: Form(
@@ -113,6 +148,11 @@ class _LoginFormState extends State<_LoginForm> {
           onPressed: form.submitting ? null : _openRegister,
           child: const Text('Create an account'),
         ),
+        if (!widget.fromGuest)
+          TextButton(
+            onPressed: form.submitting ? null : _continueAsGuest,
+            child: const Text('Continue without an account'),
+          ),
       ],
     );
   }

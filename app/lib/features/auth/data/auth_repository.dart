@@ -21,7 +21,12 @@ abstract interface class AuthRepository {
     required String password,
   });
 
+  /// Starts guest mode: no account, everything stays on this phone.
+  /// Remembered, so the app opens straight to the dashboard next time.
+  Future<AuthUser> continueAsGuest();
+
   /// Ends the session on the server (best effort) and wipes this phone's data.
+  /// For a guest this deletes everything they saved.
   Future<void> logOut();
 
   /// Fires when the server rejects the session (e.g. refresh token expired).
@@ -48,11 +53,17 @@ class ApiAuthRepository implements AuthRepository {
   Future<AuthUser?> restoreSession() async {
     final refreshToken = await _tokens.readRefreshToken();
     final userJson = await _tokens.readUserJson();
-    if (refreshToken == null || userJson == null) return null;
+    if (userJson == null) return null;
     try {
-      return AuthUser.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
-    } on FormatException {
-      await _tokens.clear();
+      final user = AuthUser.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+      // A guest has no tokens; an account without its refresh token can't sync.
+      if (user.isGuest) return AuthUser.guest;
+      return refreshToken == null ? null : user;
+    } catch (_) {
+      // Saved by an older version, or damaged: start again from the login screen.
+      try {
+        await _tokens.clear();
+      } catch (_) {}
       return null;
     }
   }
@@ -73,6 +84,14 @@ class ApiAuthRepository implements AuthRepository {
         'password': password,
       });
 
+  @override
+  Future<AuthUser> continueAsGuest() async {
+    await _tokens.saveUserJson(jsonEncode(AuthUser.guest.toJson()));
+    return AuthUser.guest;
+  }
+
+  /// Also used by a guest who creates an account or logs in: the medications
+  /// already on this phone are kept and uploaded to the account at the next sync.
   Future<AuthUser> _authenticate(String path, Map<String, dynamic> body) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(path, data: body);

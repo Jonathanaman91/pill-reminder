@@ -47,8 +47,12 @@ class _AuthGateState extends State<AuthGate> {
     return MultiBlocListener(
       listeners: [
         BlocListener<AuthBloc, AuthState>(
+          // A guest who creates an account or logs in stays "authenticated",
+          // so a change of user must also close the screens and restart.
           listenWhen: (prev, curr) =>
-              prev.status != curr.status || (curr.notice != null && prev.notice != curr.notice),
+              prev.status != curr.status ||
+              prev.user?.id != curr.user?.id ||
+              (curr.notice != null && prev.notice != curr.notice),
           listener: (context, state) {
             if (state.status == AuthStatus.authenticated) {
               context.read<RemindersCubit>().start();

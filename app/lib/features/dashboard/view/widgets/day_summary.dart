@@ -62,8 +62,10 @@ class DaySummary extends StatelessWidget {
         if (snapshot.total > 0) ...[
           const SizedBox(height: AppSpace.lg),
           _ProgressRow(snapshot: snapshot),
-          const SizedBox(height: AppSpace.md),
-          _StreakRow(snapshot: snapshot),
+          if (snapshot.streakAsOf != null) ...[
+            const SizedBox(height: AppSpace.md),
+            _StreakRow(snapshot: snapshot),
+          ],
         ],
       ],
     );
@@ -90,8 +92,10 @@ class _ProgressRow extends StatelessWidget {
               value: value,
               minHeight: 6,
               borderRadius: const BorderRadius.all(Radius.circular(AppRadius.full)),
-              semanticsLabel: 'Doses taken today',
-              semanticsValue: '${snapshot.takenCount} of ${snapshot.total}',
+              // Flutter requires a progress bar's spoken value to be a
+              // number (a percentage), so the count goes in the label.
+              semanticsLabel: 'Doses taken today: ${snapshot.takenCount} of ${snapshot.total}',
+              semanticsValue: '${(snapshot.progress * 100).round()}',
             ),
           ),
         ),

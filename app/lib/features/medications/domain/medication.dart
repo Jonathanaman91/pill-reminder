@@ -89,3 +89,81 @@ class NewMedication extends Equatable {
   List<Object?> get props => [name, form, dosageAmount, dosageUnit, quantity, times,
         daysMask, startDate, endDate, instructions, photoPath];
 }
+
+/// A medication that is already saved, as the Medications list and the edit
+/// form see it. Editing sends back a [NewMedication] with the new values.
+class Medication extends Equatable {
+  const Medication({
+    required this.id,
+    required this.name,
+    required this.form,
+    required this.dosageAmount,
+    required this.dosageUnit,
+    required this.quantity,
+    required this.times,
+    required this.daysMask,
+    required this.startDate,
+    this.endDate,
+    this.instructions,
+    this.photo,
+  });
+
+  /// A saved copy of what the form collected (used by the demo repository).
+  Medication.fromNew(this.id, NewMedication m)
+      : name = m.name.trim(),
+        form = m.form,
+        dosageAmount = m.dosageAmount,
+        dosageUnit = m.dosageUnit,
+        quantity = m.quantity,
+        times = [...m.times]..sort(),
+        daysMask = m.daysMask,
+        startDate = m.startDate,
+        endDate = m.endDate,
+        instructions = m.instructions,
+        photo = m.photoPath;
+
+  final String id;
+  final String name;
+  final DosageForm form;
+  final double dosageAmount;
+  final String dosageUnit;
+  final double quantity;
+  final List<ClockTime> times; // sorted
+  final int daysMask;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final String? instructions;
+
+  /// Pill-bottle photo: a file path on this phone, or an http(s) URL.
+  final String? photo;
+
+  /// "500 mg · 2 tablets · After food"
+  String get detailLabel {
+    final parts = <String>['${trimNumber(dosageAmount)} $dosageUnit'];
+    if (form.countable) {
+      parts.add('${trimNumber(quantity)} ${quantity == 1 ? form.name : '${form.name}s'}');
+    }
+    final note = instructions?.trim() ?? '';
+    if (note.isNotEmpty) parts.add(note);
+    return parts.join(' · ');
+  }
+
+  /// "08:00 · 20:00 · Every day" or "08:00 · Mon, Wed, Fri"
+  String get scheduleLabel {
+    final days = daysMask == WeekDays.everyDay
+        ? 'Every day'
+        : [
+            for (var i = 0; i < 7; i++)
+              if (WeekDays.has(daysMask, i)) WeekDays.labels[i],
+          ].join(', ');
+    return [...times.map((t) => t.hhmm), days].join(' · ');
+  }
+
+  /// 500.0 → "500", 2.5 → "2.5"
+  static String trimNumber(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  @override
+  List<Object?> get props => [id, name, form, dosageAmount, dosageUnit, quantity, times,
+        daysMask, startDate, endDate, instructions, photo];
+}

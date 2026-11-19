@@ -5,24 +5,9 @@ import '../domain/dashboard_snapshot.dart';
 import '../domain/today_dose.dart';
 import 'dashboard_repository.dart';
 
-typedef _Slot = ({
-  String id,
-  String med,
-  String name,
-  double amount,
-  String unit,
-  String form,
-  double qty,
-  String? note,
-  int h,
-  int m,
-  String? photo,
-  int days,
-});
-
 /// In-memory stand-in for the real repository, so the dashboard can be run
-/// and demoed before the backend exists. Turn it off with
-/// `flutter run --dart-define=DEMO_DATA=false`.
+/// and demoed before the backend exists. Turn it on with
+/// `flutter run --dart-define=DEMO_DATA=true`.
 class DemoDashboardRepository implements DashboardRepository {
   DemoDashboardRepository({this.simulateOffline = false}) {
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _notify(dataChanged: false));
@@ -38,25 +23,31 @@ class DemoDashboardRepository implements DashboardRepository {
   DateTime? _lastSyncedAt;
   int _pending = 0;
 
-  // Starts with a sample plan; medications added in the form are appended.
-  final List<_Slot> _plan = [..._samplePlan];
-
-  static const List<_Slot> _samplePlan = [
-    (id: 's1', med: 'm1', name: 'Metformin', amount: 500.0, unit: 'mg', form: 'tablet',
-        qty: 1.0, note: 'After breakfast', h: 8, m: 0, photo: null, days: 127),
-    (id: 's2', med: 'm2', name: 'Amlodipine', amount: 5.0, unit: 'mg', form: 'tablet',
-        qty: 1.0, note: null, h: 9, m: 30, photo: null, days: 127),
-    (id: 's3', med: 'm3', name: 'Vitamin D3', amount: 1000.0, unit: 'IU', form: 'capsule',
-        qty: 1.0, note: 'With food', h: 13, m: 0, photo: null, days: 127),
-    (id: 's4', med: 'm1', name: 'Metformin', amount: 500.0, unit: 'mg', form: 'tablet',
-        qty: 1.0, note: 'After dinner', h: 19, m: 30, photo: null, days: 127),
-    (id: 's5', med: 'm4', name: 'Atorvastatin', amount: 20.0, unit: 'mg', form: 'tablet',
-        qty: 1.0, note: null, h: 22, m: 0, photo: null, days: 127),
+  // Starts with a sample plan; the form adds, edits and deletes entries.
+  final List<Medication> _medications = [
+    Medication(id: 'm1', name: 'Metformin', form: DosageForm.tablet, dosageAmount: 500,
+        dosageUnit: 'mg', quantity: 1, times: const [ClockTime(8, 0), ClockTime(19, 30)],
+        daysMask: WeekDays.everyDay, startDate: _sampleStart, instructions: 'After food'),
+    Medication(id: 'm2', name: 'Amlodipine', form: DosageForm.tablet, dosageAmount: 5,
+        dosageUnit: 'mg', quantity: 1, times: const [ClockTime(9, 30)],
+        daysMask: WeekDays.everyDay, startDate: _sampleStart),
+    Medication(id: 'm3', name: 'Vitamin D3', form: DosageForm.capsule, dosageAmount: 1000,
+        dosageUnit: 'IU', quantity: 1, times: const [ClockTime(13, 0)],
+        daysMask: WeekDays.everyDay, startDate: _sampleStart, instructions: 'With food'),
+    Medication(id: 'm4', name: 'Atorvastatin', form: DosageForm.tablet, dosageAmount: 20,
+        dosageUnit: 'mg', quantity: 1, times: const [ClockTime(22, 0)],
+        daysMask: WeekDays.everyDay, startDate: _sampleStart),
   ];
+  static final _sampleStart = DateTime(2026);
 
   void _notify({bool dataChanged = true}) {
     if (!_changes.isClosed) _changes.add(null);
     if (dataChanged && !_dataChanges.isClosed) _dataChanges.add(null);
+  }
+
+  static DateTime _minuteNow() {
+    final c = DateTime.now();
+    return DateTime(c.year, c.month, c.day, c.hour, c.minute);
   }
 
   @override
@@ -64,14 +55,11 @@ class DemoDashboardRepository implements DashboardRepository {
 
   @override
   Future<List<TodayDose>> upcomingDoses({int days = 7}) async {
-    final c = DateTime.now();
-    final now = DateTime(c.year, c.month, c.day, c.hour, c.minute);
+    final now = _minuteNow();
     return [
       for (var i = 0; i < days; i++)
-        for (final slot in _plan)
-          if (slot.days & (1 << (DateTime(now.year, now.month, now.day + i).weekday - 1)) != 0)
-            _doseFor(slot, now, day: DateTime(now.year, now.month, now.day + i)),
-    ]..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+        ..._dosesOn(DateTime(now.year, now.month, now.day + i), now),
+    ];
   }
 
   @override
@@ -85,16 +73,10 @@ class DemoDashboardRepository implements DashboardRepository {
   }
 
   DashboardSnapshot _build() {
-    final c = DateTime.now();
-    final now = DateTime(c.year, c.month, c.day, c.hour, c.minute);
-    final todayBit = 1 << (now.weekday - 1);
-    final doses = [
-      for (final slot in _plan)
-        if (slot.days & todayBit != 0) _doseFor(slot, now),
-    ]..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    final now = _minuteNow();
     return DashboardSnapshot(
       now: now,
-      doses: doses,
+      doses: _dosesOn(DateTime(now.year, now.month, now.day), now),
       streakBeforeToday: 11,
       bestStreak: 19,
       streakAsOf: now,
@@ -103,26 +85,40 @@ class DemoDashboardRepository implements DashboardRepository {
     );
   }
 
-  TodayDose _doseFor(_Slot p, DateTime now, {DateTime? day}) {
-    final d = day ?? now;
-    final at = DateTime(d.year, d.month, d.day, p.h, p.m);
-    final key = '${p.id}@${at.millisecondsSinceEpoch}';
-    final log = _logs[key];
-    return TodayDose(
-      scheduleId: p.id,
-      medicationId: p.med,
-      name: p.name,
-      dosageAmount: p.amount,
-      dosageUnit: p.unit,
-      form: p.form,
-      quantity: p.qty,
-      instructions: p.note,
-      photo: p.photo,
-      scheduledAt: at,
-      status: DosePolicy.resolve(scheduledAt: at, now: now, loggedStatus: log?.status.name),
-      logId: log == null ? null : key,
-      takenAt: log?.takenAt,
-    );
+  /// One day's doses, earliest first, from the medications in memory.
+  List<TodayDose> _dosesOn(DateTime day, DateTime now) {
+    final dayBit = 1 << (day.weekday - 1); // Mon=1 … Sun=64
+    final doses = <TodayDose>[];
+    for (final med in _medications) {
+      final end = med.endDate;
+      if (med.daysMask & dayBit == 0) continue;
+      if (day.isBefore(med.startDate) || (end != null && day.isAfter(end))) continue;
+
+      for (final time in med.times) {
+        final at = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+        // The id depends only on the medication and the time, so editing other
+        // details keeps today's "taken" marks.
+        final scheduleId = '${med.id}-${time.hhmm}';
+        final key = '$scheduleId@${at.millisecondsSinceEpoch}';
+        final log = _logs[key];
+        doses.add(TodayDose(
+          scheduleId: scheduleId,
+          medicationId: med.id,
+          name: med.name,
+          dosageAmount: med.dosageAmount,
+          dosageUnit: med.dosageUnit,
+          form: med.form.name,
+          quantity: med.quantity,
+          instructions: med.instructions,
+          photo: med.photo,
+          scheduledAt: at,
+          status: DosePolicy.resolve(scheduledAt: at, now: now, loggedStatus: log?.status.name),
+          logId: log == null ? null : key,
+          takenAt: log?.takenAt,
+        ));
+      }
+    }
+    return doses..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
   }
 
   @override
@@ -163,26 +159,28 @@ class DemoDashboardRepository implements DashboardRepository {
     _notify();
   }
 
-  /// Used by DemoMedicationRepository so the Add Medication form works
-  /// without a backend.
+  // ---------------------------------------------------------------------------
+  // Used by DemoMedicationRepository, so the medication screens work without
+  // a backend.
+  // ---------------------------------------------------------------------------
+
+  List<Medication> get medications => [..._medications]
+    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
   void addMedication(NewMedication med) {
-    final id = 'demo-${DateTime.now().microsecondsSinceEpoch}';
-    for (final (i, t) in med.times.indexed) {
-      _plan.add((
-        id: '$id-$i',
-        med: id,
-        name: med.name.trim(),
-        amount: med.dosageAmount,
-        unit: med.dosageUnit,
-        form: med.form.name,
-        qty: med.quantity,
-        note: med.instructions,
-        h: t.hour,
-        m: t.minute,
-        photo: med.photoPath,
-        days: med.daysMask,
-      ));
-    }
+    _medications.add(Medication.fromNew('demo-${DateTime.now().microsecondsSinceEpoch}', med));
+    _notify();
+  }
+
+  void updateMedication(String id, NewMedication med) {
+    final index = _medications.indexWhere((m) => m.id == id);
+    if (index < 0) throw StateError('This medication no longer exists.');
+    _medications[index] = Medication.fromNew(id, med);
+    _notify();
+  }
+
+  void deleteMedication(String id) {
+    _medications.removeWhere((m) => m.id == id);
     _notify();
   }
 

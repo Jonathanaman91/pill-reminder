@@ -6,26 +6,35 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/validation/validators.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/submit_button.dart';
 import '../bloc/add_medication_cubit.dart';
 import '../data/medication_repository.dart';
 import '../domain/medication.dart';
 import 'widgets/photo_slot.dart';
 
+/// The medication form. With no [medication] it adds a new one; with a saved
+/// [medication] it opens filled in, and Save asks before changing it.
 class AddMedicationScreen extends StatelessWidget {
-  const AddMedicationScreen({super.key});
+  const AddMedicationScreen({super.key, this.medication});
+
+  final Medication? medication;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => AddMedicationCubit(context.read<MedicationRepository>()),
-      child: const _AddMedicationForm(),
+      create: (context) =>
+          AddMedicationCubit(context.read<MedicationRepository>(), editing: medication),
+      child: _AddMedicationForm(medication),
     );
   }
 }
 
 class _AddMedicationForm extends StatefulWidget {
-  const _AddMedicationForm();
+  const _AddMedicationForm(this.medication);
+
+  /// The saved medication being edited, or null when adding.
+  final Medication? medication;
 
   @override
   State<_AddMedicationForm> createState() => _AddMedicationFormState();
@@ -42,6 +51,18 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
   static const _instructionPresets = ['Before food', 'After food', 'With food', 'Before bed'];
 
   AddMedicationCubit get _cubit => context.read<AddMedicationCubit>();
+  Medication? get _editing => widget.medication;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = _editing;
+    if (m != null) {
+      _name.text = m.name;
+      _strength.text = Medication.trimNumber(m.dosageAmount);
+      _instructions.text = m.instructions ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -51,7 +72,15 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
     super.dispose();
   }
 
+  /// Is there anything the user would lose by leaving now?
   bool get _hasInput {
+    final m = _editing;
+    if (m != null) {
+      return _cubit.choicesChanged ||
+          _name.text.trim() != m.name ||
+          Validators.parseAmount(_strength.text) != m.dosageAmount ||
+          _instructions.text.trim() != (m.instructions ?? '');
+    }
     final s = _cubit.state;
     return _name.text.isNotEmpty ||
         _strength.text.isNotEmpty ||
@@ -71,7 +100,11 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
   // ---------------------------------------------------------------------------
 
   Future<void> _choosePhoto() async {
-    final hasPhoto = _cubit.state.photoPath != null;
+    // While editing, the saved photo can be replaced but not removed, so
+    // "remove" only undoes a photo picked in this visit.
+    final savedPhoto = _editing?.photo;
+    final current = _cubit.state.photoPath;
+    final canRemove = current != null && current != savedPhoto;
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -90,10 +123,11 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
               title: const Text('Choose from gallery'),
               onTap: () => Navigator.pop(sheet, 'gallery'),
             ),
-            if (hasPhoto)
+            if (canRemove)
               ListTile(
                 leading: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
-                title: const Text('Remove photo', style: TextStyle(color: AppColors.danger)),
+                title: Text(savedPhoto == null ? 'Remove photo' : 'Go back to the saved photo',
+                    style: const TextStyle(color: AppColors.danger)),
                 onTap: () => Navigator.pop(sheet, 'remove'),
               ),
             const SizedBox(height: AppSpace.sm),
@@ -103,7 +137,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
     );
     if (choice == null || !mounted) return;
     if (choice == 'remove') {
-      _cubit.setPhoto(null);
+      _cubit.setPhoto(savedPhoto);
       return;
     }
 
@@ -170,6 +204,25 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
       return;
     }
 
+    final editing = _editing;
+    if (editing != null) {
+      if (!_hasInput) {
+        _saved = true;
+        _toast('Nothing was changed.');
+        Navigator.of(context).pop();
+        return;
+      }
+      // Second step: changing a medication changes its reminders too, so ask.
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Save changes?',
+        message: '${editing.name} and its reminders will follow the new details from now on.',
+        confirmLabel: 'Save changes',
+        cancelLabel: 'Keep editing',
+      );
+      if (!confirmed || !mounted) return;
+    }
+
     final ok = await _cubit.save(
       name: _name.text,
       strength: Validators.parseAmount(_strength.text)!,
@@ -177,9 +230,12 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
     );
     if (!ok || !mounted) return;
 
+    final name = _name.text.trim();
     final count = _cubit.state.times.length;
     _saved = true;
-    _toast('${_name.text.trim()} added · $count reminder${count == 1 ? '' : 's'} a day');
+    _toast(editing != null
+        ? '$name updated'
+        : '$name added · $count reminder${count == 1 ? '' : 's'} a day');
     Navigator.of(context).pop();
   }
 
@@ -187,8 +243,10 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
     final discard = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: const Text('Discard this medication?'),
-        content: const Text('What you’ve entered will be lost.'),
+        title: Text(_editing == null ? 'Discard this medication?' : 'Discard your changes?'),
+        content: Text(_editing == null
+            ? 'What you’ve entered will be lost.'
+            : '${_editing!.name} will stay as it was.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialog, false),
@@ -230,7 +288,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Add medication'),
+          title: Text(_editing == null ? 'Add medication' : 'Edit medication'),
           backgroundColor: AppColors.background,
           scrolledUnderElevation: 0,
         ),
@@ -297,7 +355,9 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
                         initialValue: state.unit,
                         decoration: const InputDecoration(labelText: 'Unit'),
                         items: [
-                          for (final u in state.form.units)
+                          // A unit saved earlier (or on another device) stays
+                          // selectable even if this form doesn't list it.
+                          for (final u in {...state.form.units, state.unit})
                             DropdownMenuItem(value: u, child: Text(u)),
                         ],
                         onChanged: (u) {
@@ -463,7 +523,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
             padding: const EdgeInsets.fromLTRB(
                 AppSpace.screen, AppSpace.sm, AppSpace.screen, AppSpace.md),
             child: SubmitButton(
-              label: 'Save medication',
+              label: _editing == null ? 'Save medication' : 'Save changes',
               submitting: state.submitting,
               onPressed: _save,
             ),

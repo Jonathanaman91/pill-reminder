@@ -29,6 +29,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final DashboardRepository _repository;
   int _feedbackSeq = 0;
 
+  /// Guest mode. There is no server copy to wait for, so an empty phone
+  /// means an empty schedule, not "still loading".
+  bool _localOnly = false;
+
   Future<void> _onStarted(DashboardStarted event, Emitter<DashboardState> emit) async {
     add(const DashboardRefreshRequested());
 
@@ -37,7 +41,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       _repository.watchToday(),
       onData: (snapshot) => state.copyWith(
         snapshot: snapshot,
-        status: snapshot.hasCache ? DashboardStatus.ready : state.status,
+        status: snapshot.hasCache || _localOnly ? DashboardStatus.ready : state.status,
       ),
       onError: (_, _) => state.copyWith(
         status: state.snapshot == null ? DashboardStatus.failure : state.status,
@@ -60,6 +64,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     final hasCache = state.snapshot?.hasCache ?? false;
 
     switch (outcome) {
+      case SyncOutcome.localOnly:
+        _localOnly = true;
+        emit(state.copyWith(
+          sync: SyncIndicator.localOnly,
+          status: state.snapshot != null ? DashboardStatus.ready : null,
+        ));
       case SyncOutcome.synced:
         // The fresh snapshot arrives through watchToday() and sets status.
         emit(state.copyWith(sync: SyncIndicator.idle));

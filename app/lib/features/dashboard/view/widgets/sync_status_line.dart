@@ -48,6 +48,11 @@ class SyncStatusLine extends StatelessWidget {
           pending > 0 ? 'Offline · $changes will sync later' : 'Offline · schedule ${_savedAt()}',
           true,
         ),
+      SyncIndicator.localOnly => (
+          const Icon(Icons.smartphone_rounded, size: 16, color: AppColors.inkSecondary),
+          'Guest · saved on this phone only',
+          false,
+        ),
       SyncIndicator.error => (
           const Icon(Icons.sync_problem_rounded, size: 16, color: AppColors.inkSecondary),
           'Couldn’t sync · tap to retry',

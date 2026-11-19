@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { config } from './config.js';
 import { errorHandler, notFound } from './errors.js';
+import { adminRouter } from './routes/admin.routes.js';
 import { authRouter } from './routes/auth.routes.js';
 import { facilitiesRouter } from './routes/facilities.routes.js';
 import { medicationsRouter, photosRouter } from './routes/medications.routes.js';
@@ -24,11 +25,11 @@ export function createApp() {
 
   app.get('/api/v1/health', (req, res) => res.json({ ok: true }));
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/admin', adminRouter); // Web Admin panel only
   app.use('/api/v1', syncRouter);
   app.use('/api/v1', medicationsRouter);
   app.use('/api/v1', facilitiesRouter);
   app.use(photosRouter); // GET /uploads/<id>.jpg
-  // Next step: /api/v1/admin/*
 
   app.use(notFound);
   app.use(errorHandler);
