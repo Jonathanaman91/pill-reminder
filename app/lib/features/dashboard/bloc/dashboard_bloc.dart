@@ -97,7 +97,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     emit(state.copyWith(busyDoseKeys: {...state.busyDoseKeys, key}));
     try {
-      final saved = await _repository.recordDose(event.dose, event.status);
+      final saved =
+          await _repository.recordDose(event.dose, event.status, skipReason: event.skipReason);
       final verb = event.status == DoseStatus.taken ? 'marked as taken' : 'skipped';
       emit(state.copyWith(
         busyDoseKeys: state.busyDoseKeys.difference({key}),

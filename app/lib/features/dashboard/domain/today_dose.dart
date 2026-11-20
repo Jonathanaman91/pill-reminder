@@ -74,6 +74,8 @@ class TodayDose extends Equatable {
     this.photo,
     this.logId,
     this.takenAt,
+    this.formDetail,
+    this.skipReason,
   });
 
   final String scheduleId;
@@ -82,6 +84,12 @@ class TodayDose extends Equatable {
   final double dosageAmount;
   final String dosageUnit;
   final String form; // tablet, capsule, liquid, …
+
+  /// What "other" means, typed by the user, e.g. "Patch".
+  final String? formDetail;
+
+  /// Why the dose was skipped, e.g. "Ran out of medicine".
+  final String? skipReason;
   final double quantity; // e.g. 2 tablets
   final String? instructions;
 
@@ -97,9 +105,13 @@ class TodayDose extends Equatable {
 
   DayPart get dayPart => DayPart.of(scheduledAt);
 
-  /// "500 mg · 2 tablets · After food"
+  /// "500 mg · 2 tablets · After food", or "Patch · 25 mcg" for an "other" form.
   String get detailLabel {
-    final parts = <String>['${_trim(dosageAmount)} $dosageUnit'];
+    final detail = formDetail?.trim() ?? '';
+    final parts = <String>[
+      if (form == 'other' && detail.isNotEmpty) detail,
+      '${_trim(dosageAmount)} $dosageUnit',
+    ];
     if (form == 'tablet' || form == 'capsule') {
       parts.add('${_trim(quantity)} ${quantity == 1 ? form : '${form}s'}');
     }
@@ -109,7 +121,13 @@ class TodayDose extends Equatable {
     return parts.join(' · ');
   }
 
-  TodayDose copyWith({DoseStatus? status, String? logId, DateTime? takenAt}) => TodayDose(
+  TodayDose copyWith({
+    DoseStatus? status,
+    String? logId,
+    DateTime? takenAt,
+    String? Function()? skipReason,
+  }) =>
+      TodayDose(
         scheduleId: scheduleId,
         medicationId: medicationId,
         name: name,
@@ -123,6 +141,8 @@ class TodayDose extends Equatable {
         status: status ?? this.status,
         logId: logId ?? this.logId,
         takenAt: takenAt ?? this.takenAt,
+        formDetail: formDetail,
+        skipReason: skipReason != null ? skipReason() : this.skipReason,
       );
 
   static String _trim(double v) =>
@@ -130,5 +150,5 @@ class TodayDose extends Equatable {
 
   @override
   List<Object?> get props => [scheduleId, scheduledAt, name, dosageAmount, dosageUnit,
-        form, quantity, instructions, photo, status, logId, takenAt];
+        form, formDetail, quantity, instructions, photo, status, logId, takenAt, skipReason];
 }

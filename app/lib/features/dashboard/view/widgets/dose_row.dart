@@ -35,6 +35,7 @@ class DoseRow extends StatelessWidget {
     final detail = switch (dose.status) {
       DoseStatus.taken when dose.takenAt != null =>
         'Taken at ${DateFormat.Hm().format(dose.takenAt!)} · ${dose.detailLabel}',
+      DoseStatus.skipped when dose.skipReason != null => 'Skipped · ${dose.skipReason}',
       DoseStatus.skipped => 'Skipped · ${dose.detailLabel}',
       DoseStatus.missed => 'Missed · ${dose.detailLabel}',
       _ => dose.detailLabel,

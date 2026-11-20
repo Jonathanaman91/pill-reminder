@@ -29,6 +29,12 @@ class _NoReminders implements ReminderPlatform {
   @override
   Future<void> requestExactAlarms() async {}
   @override
+  Future<void> requestBackgroundRun() async {}
+  @override
+  Future<void> openAppDetails() async {}
+  @override
+  Future<String?> deviceMaker() async => null;
+  @override
   Future<void> openSettings() async {}
   @override
   Future<void> replaceAll(List<PlannedReminder> reminders, {required bool exact}) async {}
@@ -107,21 +113,32 @@ void main() {
     await finish(tester);
   });
 
-  testWidgets('skipping a dose needs a confirmation too', (tester) async {
+  testWidgets('skipping a dose needs a warning and a reason', (tester) async {
     await pumpApp(tester, DashboardScreen(onAddMedication: () {}, onOpenAccount: () {}));
+    final sheet = find.byType(BottomSheet);
+    Finder inSheet(Finder f) => find.descendant(of: sheet, matching: f);
+    final skipButton = inSheet(find.widgetWithText(FilledButton, 'Skip dose'));
 
     await tester.tap(find.widgetWithText(TextButton, 'Skip'));
     await _wait(tester);
-    expect(_inDialog(find.text('Skip this dose?')), findsOneWidget);
-    await tester.tap(_inDialog(find.text('Not yet')));
+    expect(inSheet(find.text('Skip this dose?')), findsOneWidget);
+    expect(inSheet(find.textContaining('ask your doctor or pharmacist')), findsOneWidget);
+    // No reason chosen yet: the button does nothing.
+    expect(tester.widget<FilledButton>(skipButton).onPressed, isNull);
+    await tester.tap(inSheet(find.text('Don’t skip')));
     await _wait(tester);
     expect(find.textContaining('skipped'), findsNothing);
 
     await tester.tap(find.widgetWithText(TextButton, 'Skip'));
     await _wait(tester);
-    await tester.tap(_inDialog(find.text('Skip dose')));
+    await tester.tap(inSheet(find.text('Ran out of medicine')));
+    await _wait(tester);
+    await tester.tap(skipButton);
     await _wait(tester);
     expect(find.textContaining('skipped'), findsWidgets);
+    // The reason is kept with the dose.
+    final skipped = (await dashboard.upcomingDoses(days: 1)).where((d) => d.skipReason != null);
+    expect(skipped.single.skipReason, 'Ran out of medicine');
 
     await finish(tester);
   });

@@ -17,6 +17,7 @@ import 'features/medications/data/demo_medication_repository.dart';
 import 'features/medications/data/medication_local_source.dart';
 import 'features/medications/data/medication_remote_source.dart';
 import 'features/medications/data/medication_repository.dart';
+import 'features/profile/data/profile_repository.dart';
 
 /// flutter run                                   → demo data, no backend needed
 /// flutter run --dart-define=DEMO_DATA=false     → real SQLite + API
@@ -39,6 +40,7 @@ Future<void> main() async {
   final DashboardRepository dashboardRepository;
   final MedicationRepository medicationRepository;
   final FacilityRepository facilityRepository;
+  final ProfileRepository profileRepository;
 
   if (_useDemoData) {
     authRepository = DemoAuthRepository();
@@ -46,6 +48,7 @@ Future<void> main() async {
     dashboardRepository = demoDashboard;
     medicationRepository = DemoMedicationRepository(demoDashboard);
     facilityRepository = DemoFacilityRepository();
+    profileRepository = DemoProfileRepository();
   } else {
     final database = await AppDatabase.open();
     final tokens = TokenStorage();
@@ -56,6 +59,7 @@ Future<void> main() async {
       clearLocalData: database.clearAll,
     );
     final medicationLocal = MedicationLocalSource(database);
+    final profileLocal = ProfileLocalStore(database);
     dashboardRepository = OfflineFirstDashboardRepository(
       local: DashboardLocalSource(database),
       remote: DashboardRemoteSource(api.dio),
@@ -64,6 +68,7 @@ Future<void> main() async {
       // Upload new medications (and their photos) before dose logs.
       pushers: [
         MedicationSyncPusher(local: medicationLocal, remote: MedicationRemoteSource(api.dio)),
+        ProfileSyncPusher(local: profileLocal, dio: api.dio),
       ],
     );
     medicationRepository = OfflineFirstMedicationRepository(
@@ -71,6 +76,8 @@ Future<void> main() async {
       dashboard: dashboardRepository,
     );
     facilityRepository = CachedFacilityRepository(dio: api.dio, database: database);
+    profileRepository =
+        OfflineFirstProfileRepository(local: profileLocal, dashboard: dashboardRepository);
   }
 
   runApp(PillReminderApp(
@@ -81,5 +88,6 @@ Future<void> main() async {
     facilityRepository: facilityRepository,
     // GPS is real even in demo mode; only the places are samples.
     locationService: GeolocatorLocationService(),
+    profileRepository: profileRepository,
   ));
 }

@@ -31,6 +31,8 @@ const medicationSchema = z
     dosageAmount: z.number().positive('Strength must be more than 0.').max(100000),
     dosageUnit: z.enum(DOSAGE_UNITS),
     form: z.enum(DOSAGE_FORMS),
+    // What "other" means for this medicine, e.g. "Patch". Ignored for other forms.
+    formDetail: z.string().trim().max(40, 'Use 40 characters or fewer.').nullish(),
     instructions: z.string().trim().max(255).nullish(),
     startDate: isoDate,
     endDate: isoDate.nullish(),
@@ -71,17 +73,18 @@ medicationsRouter.post('/medications/batch', requireAuth, validateBody(batchSche
       const upsert = await db.query(
         `INSERT INTO user_medications
            (id, user_id, name, dosage_amount, dosage_unit, form, instructions,
-            start_date, end_date, is_active, deleted_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $11 THEN now() END)
+            start_date, end_date, is_active, deleted_at, form_detail)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $11 THEN now() END, $12)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name, dosage_amount = EXCLUDED.dosage_amount,
            dosage_unit = EXCLUDED.dosage_unit, form = EXCLUDED.form,
            instructions = EXCLUDED.instructions, start_date = EXCLUDED.start_date,
            end_date = EXCLUDED.end_date, is_active = EXCLUDED.is_active,
-           deleted_at = EXCLUDED.deleted_at
+           deleted_at = EXCLUDED.deleted_at, form_detail = EXCLUDED.form_detail
          WHERE user_medications.user_id = EXCLUDED.user_id`,
         [m.id, userId, m.name, m.dosageAmount, m.dosageUnit, m.form, m.instructions ?? null,
-          m.startDate, m.endDate ?? null, m.isActive, m.deleted],
+          m.startDate, m.endDate ?? null, m.isActive, m.deleted,
+          m.form === 'other' ? (m.formDetail || null) : null],
       );
       if (upsert.rowCount === 0) {
         rejected.push(m.id);

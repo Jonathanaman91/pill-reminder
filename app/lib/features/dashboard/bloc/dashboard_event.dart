@@ -24,13 +24,16 @@ final class DashboardRefreshRequested extends DashboardEvent {
 
 /// "Mark as taken" or "Skip".
 final class DoseStatusChanged extends DashboardEvent {
-  const DoseStatusChanged(this.dose, this.status);
+  const DoseStatusChanged(this.dose, this.status, {this.skipReason});
 
   final TodayDose dose;
   final DoseStatus status;
 
+  /// Asked for when skipping, because a skipped dose can be risky.
+  final String? skipReason;
+
   @override
-  List<Object?> get props => [dose, status];
+  List<Object?> get props => [dose, status, skipReason];
 }
 
 /// "Undo" on the snack bar, or tapping a taken dose again.

@@ -11,6 +11,7 @@ import 'features/facilities/data/facility_repository.dart';
 import 'features/facilities/data/location_service.dart';
 import 'features/medications/data/medication_repository.dart';
 import 'features/medications/view/add_medication_screen.dart';
+import 'features/profile/data/profile_repository.dart';
 import 'features/reminders/bloc/reminders_cubit.dart';
 
 class PillReminderApp extends StatelessWidget {
@@ -22,6 +23,7 @@ class PillReminderApp extends StatelessWidget {
     required this.reminderPlatform,
     required this.facilityRepository,
     required this.locationService,
+    required this.profileRepository,
   });
 
   final AuthRepository authRepository;
@@ -30,6 +32,7 @@ class PillReminderApp extends StatelessWidget {
   final ReminderPlatform reminderPlatform;
   final FacilityRepository facilityRepository;
   final LocationService locationService;
+  final ProfileRepository profileRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +44,7 @@ class PillReminderApp extends StatelessWidget {
         RepositoryProvider<MedicationRepository>.value(value: medicationRepository),
         RepositoryProvider<FacilityRepository>.value(value: facilityRepository),
         RepositoryProvider<LocationService>.value(value: locationService),
+        RepositoryProvider<ProfileRepository>.value(value: profileRepository),
       ],
       child: MultiBlocProvider(
         providers: [

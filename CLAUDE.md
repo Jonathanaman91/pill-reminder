@@ -6,20 +6,24 @@ Android app in Flutter + Node.js backend + PostgreSQL. ITPM group constraint:
 
 ## Repo layout
 - `app/` — Flutter app (BLoC/Cubit, flutter_bloc 9, Equatable)
-  - `lib/core/` — theme tokens, Dio API client + JWT refresh interceptor, SQLite (sqflite, DB version 3),
+  - `lib/core/` — theme tokens, Dio API client + JWT refresh interceptor, SQLite (sqflite, DB version 4),
     sync outbox, notifications, validators, shared widgets (incl. `confirm_dialog.dart`)
   - `lib/features/` — auth, dashboard (Today), medications (list tab + add/edit form + photo), reminders,
-    facilities (Nearby map), home (bottom nav: Today / Medications / Nearby)
+    history (last 30 days), profile (health profile), facilities (Nearby map),
+    home (bottom nav: Today / Medications / History / Nearby)
   - `test/` — unit/widget tests; `medication_local_source_test.dart` and `guest_mode_test.dart` run real SQLite via
     the dev-only `sqflite_common_ffi` (each test file sets its own temp database folder)
 - `release/` — exported APKs (ignored by git) + README with the build command
 - `backend/` — Node 22, Express 5, pg, bcryptjs, jsonwebtoken, zod 4, multer 2 (memoryStorage), helmet
-  - `src/routes/` auth, sync, medications (+ photo upload), facilities (nearby), admin (`/api/v1/admin/*`)
+  - `src/routes/` auth, sync, medications (+ photo upload), facilities (nearby), profile (`/me/profile`),
+    admin (`/api/v1/admin/*`, incl. `/admin/analytics`)
+  - `src/migrations.js` — applies `db/migrations/*.sql` at server start-up (so a push to main is enough
+    for a schema change on Render/Neon); `npm run db:migrate` does the same by hand
   - `src/services/` overpass (OpenStreetMap), facilityStore, streak
   - `db/schema.sql` + `db/migrations/` (idempotent; run with `npm run db:migrate`)
 - `admin/` — Web Admin panel: React 19 + Vite 8, react-router-dom 7 (HashRouter), lucide-react icons, plain CSS, no UI library
   - `src/api.js` fetch client + token refresh, `src/auth.jsx` session state, `src/ui.jsx` shared parts (Button, Dialog, Toast, Field, Pagination)
-  - `src/pages/` Login, Overview, Users, Catalog (Medications), Activity
+  - `src/pages/` Login, Overview, Analytics, Users, Catalog (Medications), Activity
   - `src/styles.css` — design tokens copied from `app/lib/core/theme/app_tokens.dart`; change both together
 - `render.yaml` — Render Blueprint (API from `backend`, static admin site from `admin`), `DEPLOY.md` — deployment guide
 - `.claude/launch.json` — starts `backend` (port 3000) and `admin` (port 5173) for local previews
@@ -70,6 +74,18 @@ Admin panel (from `admin/`):
   keeps everything and it uploads at the next sync. "Delete guest data" wipes the phone (confirmed). Streak row is
   hidden when there is no server streak. `GET /facilities/nearby` is public (rate-limited 60 / 10 min per IP via
   `middleware/rateLimit.js`) so guests can use Nearby; everything else still needs a login.
+- Lecturer feedback (2026-11-20, transcript in the course folder): the app must be more than a reminder.
+  Added: health profile (DOB, gender, conditions, allergies; meta key `health_profile` + pending flag, synced by
+  `ProfileSyncPusher` via `PUT/GET /me/profile`), History tab (past days built from current schedules; unmarked = missed),
+  skip needs a reason (`dose_logs.skip_reason`, sheet with a safety warning), "Other" form text
+  (`form_detail`), and admin Analytics (age groups, gender, conditions, adherence, sign-ups, skip reasons, forms —
+  aggregate counts only). Still open from that feedback: monetisation (ROI/MOV, e.g. premium tier) — an ITPM topic;
+  every member must push to GitHub at least once (the lecturer checks the history).
+- Reminders with the app closed: `USE_EXACT_ALARM` (Android 13+, auto-granted; SCHEDULE_EXACT_ALARM only ≤ 32),
+  `AndroidScheduleMode.alarmClock`, and a `pill_reminder/background` MethodChannel in `MainActivity.kt`
+  (battery-optimisation check/request, app settings, manufacturer). `ReminderPermission.backgroundRestricted` shows a
+  banner; on realme/OPPO/Xiaomi etc. the account sheet also tells the user to turn on Auto launch. Verified on the
+  emulator: the test reminder arrives after the app process is killed.
 - Photos are stored as bytea in `medication_photos` (Render's disk is ephemeral) and served at `/uploads/:file`.
 - Admin API: every `/admin` request re-checks role + status in the database (not just the JWT); an admin cannot suspend,
   demote or delete themself; every change writes `admin_audit_logs` in the same transaction; admins see counts, never

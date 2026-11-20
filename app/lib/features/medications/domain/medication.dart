@@ -66,10 +66,14 @@ class NewMedication extends Equatable {
     this.endDate,
     this.instructions,
     this.photoPath,
+    this.formDetail,
   });
 
   final String name;
   final DosageForm form;
+
+  /// What "Other" means for this medicine, typed by the user, e.g. "Patch".
+  final String? formDetail;
   final double dosageAmount;
   final String dosageUnit;
 
@@ -87,7 +91,7 @@ class NewMedication extends Equatable {
 
   @override
   List<Object?> get props => [name, form, dosageAmount, dosageUnit, quantity, times,
-        daysMask, startDate, endDate, instructions, photoPath];
+        daysMask, startDate, endDate, instructions, photoPath, formDetail];
 }
 
 /// A medication that is already saved, as the Medications list and the edit
@@ -106,6 +110,7 @@ class Medication extends Equatable {
     this.endDate,
     this.instructions,
     this.photo,
+    this.formDetail,
   });
 
   /// A saved copy of what the form collected (used by the demo repository).
@@ -120,11 +125,15 @@ class Medication extends Equatable {
         startDate = m.startDate,
         endDate = m.endDate,
         instructions = m.instructions,
-        photo = m.photoPath;
+        photo = m.photoPath,
+        formDetail = m.form == DosageForm.other ? m.formDetail : null;
 
   final String id;
   final String name;
   final DosageForm form;
+
+  /// What "Other" means for this medicine, e.g. "Patch".
+  final String? formDetail;
   final double dosageAmount;
   final String dosageUnit;
   final double quantity;
@@ -137,9 +146,13 @@ class Medication extends Equatable {
   /// Pill-bottle photo: a file path on this phone, or an http(s) URL.
   final String? photo;
 
-  /// "500 mg · 2 tablets · After food"
+  /// "500 mg · 2 tablets · After food", or "Patch · 25 mcg" for an "Other" form.
   String get detailLabel {
-    final parts = <String>['${trimNumber(dosageAmount)} $dosageUnit'];
+    final detail = formDetail?.trim() ?? '';
+    final parts = <String>[
+      if (form == DosageForm.other && detail.isNotEmpty) detail,
+      '${trimNumber(dosageAmount)} $dosageUnit',
+    ];
     if (form.countable) {
       parts.add('${trimNumber(quantity)} ${quantity == 1 ? form.name : '${form.name}s'}');
     }
@@ -164,6 +177,6 @@ class Medication extends Equatable {
       v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   @override
-  List<Object?> get props => [id, name, form, dosageAmount, dosageUnit, quantity, times,
+  List<Object?> get props => [id, name, form, formDetail, dosageAmount, dosageUnit, quantity, times,
         daysMask, startDate, endDate, instructions, photo];
 }

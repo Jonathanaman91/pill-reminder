@@ -14,6 +14,7 @@ import 'widgets/dashboard_skeleton.dart';
 import 'widgets/day_summary.dart';
 import 'widgets/dose_row.dart';
 import 'widgets/next_dose_card.dart';
+import 'widgets/skip_reason_sheet.dart';
 import 'widgets/sync_status_line.dart';
 
 /// Entry point: creates the BLoC for this screen.
@@ -139,21 +140,24 @@ class _DashboardContent extends StatelessWidget {
 
     // Two steps on purpose: the tap asks, the dialog confirms. One stray tap
     // while scrolling can no longer tick a dose, or a whole row of them.
-    Future<void> record(TodayDose d, DoseStatus status) async {
-      final taking = status == DoseStatus.taken;
+    Future<void> take(TodayDose d) async {
       final isLate = d.status == DoseStatus.missed;
       final confirmed = await showConfirmDialog(
         context,
-        title: taking ? 'Mark as taken?' : 'Skip this dose?',
+        title: 'Mark as taken?',
         message: '${d.name} · ${DateFormat.Hm().format(d.scheduledAt)}\n${d.detailLabel}',
-        confirmLabel: taking ? (isLate ? 'Mark as taken late' : 'Mark as taken') : 'Skip dose',
+        confirmLabel: isLate ? 'Mark as taken late' : 'Mark as taken',
         cancelLabel: 'Not yet',
-        style: taking ? ConfirmStyle.primary : ConfirmStyle.neutral,
       );
-      if (confirmed) bloc.add(DoseStatusChanged(d, status));
+      if (confirmed) bloc.add(DoseStatusChanged(d, DoseStatus.taken));
     }
 
-    void take(TodayDose d) => record(d, DoseStatus.taken);
+    // Skipping can be risky, so it needs a warning and a reason, not one tap.
+    Future<void> skip(TodayDose d) async {
+      final reason = await showSkipReasonSheet(context, d);
+      if (reason != null) bloc.add(DoseStatusChanged(d, DoseStatus.skipped, skipReason: reason));
+    }
+
     void undo(TodayDose d) => bloc.add(DoseUndoRequested(d));
 
     return RefreshIndicator(
@@ -185,7 +189,7 @@ class _DashboardContent extends StatelessWidget {
                     now: snapshot.now,
                     busy: state.isBusy(next),
                     onTake: () => take(next),
-                    onSkip: () => record(next, DoseStatus.skipped),
+                    onSkip: () => skip(next),
                   ),
                 ],
               ],

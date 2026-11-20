@@ -72,7 +72,7 @@ class DashboardLocalSource {
     final slots = await _db.rawQuery('''
       SELECT s.id AS schedule_id, s.time_of_day, s.quantity,
              m.id AS medication_id, m.name, m.dosage_amount, m.dosage_unit,
-             m.form, m.instructions,
+             m.form, m.form_detail, m.instructions,
              COALESCE(m.local_photo_path, m.photo_path) AS photo
       FROM schedules s
       JOIN medications m ON m.id = s.medication_id
@@ -108,6 +108,7 @@ class DashboardLocalSource {
         dosageAmount: (row['dosage_amount'] as num).toDouble(),
         dosageUnit: row['dosage_unit'] as String,
         form: row['form'] as String,
+        formDetail: row['form_detail'] as String?,
         quantity: (row['quantity'] as num).toDouble(),
         instructions: row['instructions'] as String?,
         photo: row['photo'] as String?,
@@ -119,16 +120,31 @@ class DashboardLocalSource {
         ),
         logId: log?['id'] as String?,
         takenAt: takenAtMs == null ? null : DateTime.fromMillisecondsSinceEpoch(takenAtMs),
+        skipReason: log?['skip_reason'] as String?,
       ));
     }
     return doses;
+  }
+
+  /// The [days] days before today, newest first, each with its doses: a
+  /// dose that was never marked counts as missed. Built from the current
+  /// schedules, like today's list.
+  Future<List<({DateTime day, List<TodayDose> doses})>> history(DateTime now, {int days = 30}) async {
+    final result = <({DateTime day, List<TodayDose> doses})>[];
+    for (var i = 1; i <= days; i++) {
+      final day = DateTime(now.year, now.month, now.day - i);
+      final doses = await _dosesForDay(day, now);
+      if (doses.isNotEmpty) result.add((day: day, doses: doses));
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------
   // Writing (user actions) — saved locally first, uploaded later.
   // ---------------------------------------------------------------------------
 
-  Future<TodayDose> saveDoseStatus(TodayDose dose, DoseStatus status, DateTime now) async {
+  Future<TodayDose> saveDoseStatus(TodayDose dose, DoseStatus status, DateTime now,
+      {String? skipReason}) async {
     // Re-use the id of an earlier (possibly undone) log for this slot, so the
     // server sees one row being updated instead of two competing rows.
     final existing = await _db.query(
@@ -140,6 +156,7 @@ class DashboardLocalSource {
     );
     final id = existing.isEmpty ? _uuid.v4() : existing.first['id'] as String;
     final takenAt = status == DoseStatus.taken ? now : null;
+    final reason = status == DoseStatus.skipped ? skipReason : null;
 
     await _db.insert(
       'dose_logs',
@@ -150,13 +167,14 @@ class DashboardLocalSource {
         'scheduled_at': dose.scheduledAt.millisecondsSinceEpoch,
         'status': status.name,
         'taken_at': takenAt?.millisecondsSinceEpoch,
+        'skip_reason': reason,
         'updated_at': now.millisecondsSinceEpoch,
         'deleted': 0,
         'sync_state': 'pending',
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    return dose.copyWith(status: status, logId: id, takenAt: takenAt);
+    return dose.copyWith(status: status, logId: id, takenAt: takenAt, skipReason: () => reason);
   }
 
   Future<void> clearDoseStatus(String logId, DateTime now) => _db.update(
@@ -224,6 +242,7 @@ class DashboardLocalSource {
             'dosage_amount': _toDouble(m['dosageAmount']),
             'dosage_unit': m['dosageUnit'],
             'form': m['form'],
+            'form_detail': m['formDetail'],
             'instructions': m['instructions'],
             'photo_path': m['photoUrl'],
             'local_photo_path': localPhotos[m['id']],
@@ -271,6 +290,7 @@ class DashboardLocalSource {
             'scheduled_at': DateTime.parse(l['scheduledAt'] as String).millisecondsSinceEpoch,
             'status': l['status'],
             'taken_at': takenAt == null ? null : DateTime.parse(takenAt).millisecondsSinceEpoch,
+            'skip_reason': l['skipReason'],
             'updated_at': DateTime.parse(l['updatedAt'] as String).millisecondsSinceEpoch,
             'deleted': l['deletedAt'] == null ? 0 : 1,
             'sync_state': 'synced',

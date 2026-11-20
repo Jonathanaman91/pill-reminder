@@ -10,6 +10,9 @@ import '../domain/today_dose.dart';
 import 'dashboard_local_source.dart';
 import 'dashboard_remote_source.dart';
 
+/// One past day on the History tab.
+typedef DoseDay = ({DateTime day, List<TodayDose> doses});
+
 enum SyncOutcome {
   synced,
   offline,
@@ -29,7 +32,11 @@ abstract interface class DashboardRepository {
   /// Uploads pending changes, then downloads what changed on the server.
   Future<SyncOutcome> sync();
 
-  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status);
+  /// [skipReason] is kept only when [status] is skipped.
+  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status, {String? skipReason});
+
+  /// The days before today, newest first, for the History tab.
+  Future<List<DoseDay>> history({int days = 30});
 
   Future<void> undoDose(TodayDose dose);
 
@@ -191,8 +198,11 @@ class OfflineFirstDashboardRepository implements DashboardRepository {
   }
 
   @override
-  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status) async {
-    final saved = await _local.saveDoseStatus(dose, status, _clock());
+  Future<List<DoseDay>> history({int days = 30}) => _local.history(_clock(), days: days);
+
+  @override
+  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status, {String? skipReason}) async {
+    final saved = await _local.saveDoseStatus(dose, status, _clock(), skipReason: skipReason);
     _notify();
     unawaited(sync()); // best effort; stays queued if offline
     return saved;

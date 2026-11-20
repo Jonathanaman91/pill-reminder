@@ -379,6 +379,65 @@ tbody tr { border-top: 1px solid var(--divider); }
 .feed-meta { font-size: 13px; color: var(--ink-secondary); white-space: nowrap; }
 
 /* ==========================================================================
+   Analytics — one series per chart, in the accent; values printed on the
+   marks, so no legend and nothing relies on colour alone
+   ========================================================================== */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+.chart-card { padding: var(--space-xl); }
+.chart-card h2 { font-size: 16px; }
+.chart-note { margin: var(--space-xs) 0 var(--space-lg); font-size: 13px; color: var(--ink-secondary); }
+.chart-empty { padding: var(--space-xl) 0; color: var(--ink-secondary); }
+
+.hbars { width: 100%; border-collapse: collapse; }
+.hbars tr { border: 0; }
+.hbars th, .hbars td { padding: 5px 0; border: 0; vertical-align: middle; }
+.hbars th { width: 38%; padding-right: var(--space-md); font-weight: 400; color: var(--ink); white-space: normal; font-size: 14px; }
+.hbars-track { width: 100%; }
+.hbars-bar {
+  display: block;
+  height: 14px;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0; /* rounded data end, flat on the baseline */
+  background: var(--accent);
+}
+.hbars td.num { padding-left: var(--space-md); width: 1%; white-space: nowrap; }
+.hbars-extra { color: var(--ink-secondary); }
+
+.columns-tip { min-height: 19px; margin-bottom: var(--space-sm); font-size: 13px; color: var(--ink); }
+.columns { display: flex; align-items: stretch; gap: 2px; height: 180px; }
+.column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  border-radius: var(--radius-inner);
+  cursor: default;
+}
+.column:focus-visible { outline-offset: 1px; }
+.column-value { font-size: 11px; color: var(--ink-secondary); height: 15px; white-space: nowrap; }
+.column-track {
+  flex: 1;
+  width: 100%;
+  max-width: 28px;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--divider); /* the baseline */
+}
+.column-bar { width: 100%; min-height: 4px; border-radius: 4px 4px 0 0; background: var(--accent); }
+.column.is-active .column-bar { background: var(--accent-pressed); }
+.column-label { font-size: 11px; color: var(--ink-secondary); }
+/* Only every other day label on narrow cards, so they never collide */
+@media (max-width: 1100px) { .columns .column:nth-child(even) .column-label { visibility: hidden; } }
+@media (max-width: 520px) { .chart-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ==========================================================================
    Dialog
    ========================================================================== */
 .dialog {

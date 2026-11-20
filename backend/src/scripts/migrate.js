@@ -1,15 +1,10 @@
 // npm run db:migrate — applies every file in db/migrations in name order.
-// Each migration is written to be safe to run again, so this needs no tracking table.
-import { readdir, readFile } from 'node:fs/promises';
+// (The server also does this at start-up; this script is for a new database.)
 import { pool } from '../db.js';
+import { applyMigrations } from '../migrations.js';
 
-const dir = new URL('../../db/migrations/', import.meta.url);
 try {
-  const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
-  for (const file of files) {
-    await pool.query(await readFile(new URL(file, dir), 'utf8'));
-    console.log(`Applied ${file}`);
-  }
+  await applyMigrations(pool);
   console.log('Database is up to date.');
 } catch (err) {
   console.error(`Migration failed: ${err.message}`);

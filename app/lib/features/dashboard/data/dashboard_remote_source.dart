@@ -66,6 +66,7 @@ class DashboardRemoteSource {
             'scheduledAt': iso(r['scheduled_at']),
             'status': r['status'],
             'takenAt': iso(r['taken_at']),
+            'skipReason': r['skip_reason'],
             'updatedAt': iso(r['updated_at']),
             'deleted': r['deleted'] == 1,
           },

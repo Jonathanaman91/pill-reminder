@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import Layout from './Layout.jsx';
 import Activity from './pages/Activity.jsx';
+import Analytics from './pages/Analytics.jsx';
 import Catalog from './pages/Catalog.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
@@ -33,6 +34,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Overview />} />
+        <Route path="analytics" element={<Analytics />} />
         <Route path="users" element={<Users />} />
         <Route path="medications" element={<Catalog />} />
         <Route path="activity" element={<Activity />} />

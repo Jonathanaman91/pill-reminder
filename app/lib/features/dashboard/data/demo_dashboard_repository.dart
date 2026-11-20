@@ -19,7 +19,7 @@ class DemoDashboardRepository implements DashboardRepository {
   final _changes = StreamController<void>.broadcast();
   final _dataChanges = StreamController<void>.broadcast();
   late final Timer _ticker;
-  final _logs = <String, ({DoseStatus status, DateTime? takenAt})>{};
+  final _logs = <String, ({DoseStatus status, DateTime? takenAt, String? reason})>{};
   DateTime? _lastSyncedAt;
   int _pending = 0;
 
@@ -108,6 +108,7 @@ class DemoDashboardRepository implements DashboardRepository {
           dosageAmount: med.dosageAmount,
           dosageUnit: med.dosageUnit,
           form: med.form.name,
+          formDetail: med.formDetail,
           quantity: med.quantity,
           instructions: med.instructions,
           photo: med.photo,
@@ -115,6 +116,7 @@ class DemoDashboardRepository implements DashboardRepository {
           status: DosePolicy.resolve(scheduledAt: at, now: now, loggedStatus: log?.status.name),
           logId: log == null ? null : key,
           takenAt: log?.takenAt,
+          skipReason: log?.reason,
         ));
       }
     }
@@ -144,12 +146,34 @@ class DemoDashboardRepository implements DashboardRepository {
   }
 
   @override
-  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status) async {
+  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status, {String? skipReason}) async {
     final takenAt = status == DoseStatus.taken ? DateTime.now() : null;
-    _logs[dose.key] = (status: status, takenAt: takenAt);
+    final reason = status == DoseStatus.skipped ? skipReason : null;
+    _logs[dose.key] = (status: status, takenAt: takenAt, reason: reason);
     if (simulateOffline) _pending++;
     _notify();
-    return dose.copyWith(status: status, logId: dose.key, takenAt: takenAt);
+    return dose.copyWith(status: status, logId: dose.key, takenAt: takenAt, skipReason: () => reason);
+  }
+
+  /// Sample history: most doses taken, a few skipped or missed, so the
+  /// History tab has something to show in demo mode.
+  @override
+  Future<List<DoseDay>> history({int days = 30}) async {
+    final now = _minuteNow();
+    final result = <DoseDay>[];
+    for (var i = 1; i <= days; i++) {
+      final day = DateTime(now.year, now.month, now.day - i);
+      final doses = [
+        for (final (n, d) in _dosesOn(day, now).indexed)
+          switch ((i * 7 + n * 3) % 17) {
+            0 => d.copyWith(status: DoseStatus.skipped, skipReason: () => 'Ran out of medicine'),
+            5 => d, // never marked: missed
+            _ => d.copyWith(status: DoseStatus.taken, takenAt: d.scheduledAt.add(Duration(minutes: n * 4))),
+          },
+      ];
+      if (doses.isNotEmpty) result.add((day: day, doses: doses));
+    }
+    return result;
   }
 
   @override

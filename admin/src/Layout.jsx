@@ -1,4 +1,4 @@
-import { History, LayoutDashboard, LogOut, Pill, Users } from 'lucide-react';
+import { ChartColumn, History, LayoutDashboard, LogOut, Pill, Users } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
@@ -6,6 +6,7 @@ import { ICON } from './ui.jsx';
 
 const LINKS = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/analytics', label: 'Analytics', icon: ChartColumn },
   { to: '/users', label: 'Users', icon: Users },
   { to: '/medications', label: 'Medications', icon: Pill },
   { to: '/activity', label: 'Activity', icon: History },

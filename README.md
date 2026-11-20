@@ -272,7 +272,10 @@ server only accepts browsers from the addresses in its `CORS_ORIGINS` setting.
 | `POST` | `/api/v1/medications/:id/photo` | Bearer | Multipart field `photo`: JPEG/PNG/WebP, max 5 MB |
 | `GET`  | `/uploads/<file>` | — | Uploaded pill-bottle photos |
 | `GET`  | `/api/v1/facilities/nearby?lat=&lng=&radius=` | — (60 per 10 min per IP) | Pharmacies, clinics and hospitals nearby (OpenStreetMap + admin-added), nearest first |
+| `GET`  | `/api/v1/me/profile` | Bearer | The user's health profile |
+| `PUT`  | `/api/v1/me/profile` | Bearer | `{dateOfBirth, gender, conditions[], allergies}` |
 | `GET`  | `/api/v1/admin/overview` | Admin | Totals for the admin panel's first screen |
+| `GET`  | `/api/v1/admin/analytics` | Admin | Totals by age group, gender, condition, day, week, skip reason, form |
 | `GET`  | `/api/v1/admin/users?search=&status=&role=&page=` | Admin | Users, newest first, 20 per page |
 | `GET`  | `/api/v1/admin/users/:id` | Admin | One user with counts (medications, sessions, doses) |
 | `PATCH` | `/api/v1/admin/users/:id` | Admin | `{fullName?, role?, status?}`: edit, promote, suspend, reactivate |
@@ -289,6 +292,37 @@ server only accepts browsers from the addresses in its `CORS_ORIGINS` setting.
 Errors always look like `{"error": "message", "fields": {"email": "message"}}`.
 Status codes: 401 not logged in / wrong password, 403 suspended, 409 email
 taken, 422 invalid fields.
+
+### Health profile, history and safer skipping
+
+- **Health profile** (Account → Health profile): date of birth, gender,
+  long-term conditions and allergies. Saved on the phone first and synced like
+  everything else; guests keep it on the phone.
+- **History tab**: the last 30 days, day by day, with the share of doses taken
+  in the last 7 and 30 days. A dose that was never marked counts as missed.
+- **Skipping a dose** shows a short safety warning and asks why (side effects,
+  ran out, doctor's advice, too late, other). The reason shows in History.
+- **"Other" form**: choosing Other in the medication form asks what the form
+  is (e.g. Patch, Powder), and that text shows wherever the medicine appears.
+- **Admin → Analytics**: users by age group (with their adherence), gender,
+  most common conditions, doses taken per day, new accounts per week, why
+  doses are skipped and medication forms. Only totals are sent to the browser.
+
+### Reminders when the app is closed
+
+Some phones (realme, OPPO, Xiaomi, vivo…) hold back other apps' alarms to save
+battery, so reminders only appeared after opening the app. The app now:
+
+- schedules reminders as **alarm-clock alarms** (exact, rings in deep sleep),
+  with `USE_EXACT_ALARM`, which Android 13+ grants without asking;
+- shows a banner asking to **let Pill Reminder run in the background** when
+  battery optimisation is on, and opens Android's dialog for it;
+- on those phone brands, tells the user in Account to also turn on
+  **Auto launch / Autostart** and opens the app's settings page.
+
+Use Account → Reminders → **Test**, then close the app: the alert arrives
+about a minute later. (On Google Play, `USE_EXACT_ALARM` needs a short
+justification; the sideloaded APK doesn't.)
 
 ### Guest mode (no account)
 

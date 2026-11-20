@@ -6,7 +6,15 @@
     <!-- Dose alarms (Feature f) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- Exact alarms. Android 13+ grants USE_EXACT_ALARM automatically to an
+         app that rings at set times; Android 12 needs SCHEDULE_EXACT_ALARM.
+         (A Google Play release may be asked to justify USE_EXACT_ALARM.) -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32"/>
+    <!-- Lets the app ask to be left out of battery saving, which some phones
+         (realme, OPPO, Xiaomi) use to hold back alarms until the app opens. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- Nearby pharmacies and clinics (Feature c) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>

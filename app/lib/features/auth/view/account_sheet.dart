@@ -4,6 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../profile/data/profile_repository.dart';
+import '../../profile/domain/health_profile.dart';
+import '../../profile/view/profile_screen.dart';
 import '../../reminders/bloc/reminders_cubit.dart';
 import '../bloc/auth_bloc.dart';
 import '../domain/auth_user.dart';
@@ -27,6 +30,7 @@ Future<void> showAccountSheet(BuildContext context, AuthUser user) {
       user: user,
       onCreateAccount: () => openForm(sheetContext, const RegisterScreen(fromGuest: true)),
       onLogIn: () => openForm(sheetContext, const LoginScreen(fromGuest: true)),
+      onProfile: () => openForm(sheetContext, const ProfileScreen()),
       onLogOut: () async {
         final auth = context.read<AuthBloc>();
         if (user.isGuest) {
@@ -55,12 +59,14 @@ class _AccountSheet extends StatelessWidget {
     required this.onCreateAccount,
     required this.onLogIn,
     required this.onLogOut,
+    required this.onProfile,
   });
 
   final AuthUser user;
   final VoidCallback onCreateAccount;
   final VoidCallback onLogIn;
   final VoidCallback onLogOut;
+  final VoidCallback onProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +87,8 @@ class _AccountSheet extends StatelessWidget {
               style: text.bodyMedium,
             ),
             const SizedBox(height: AppSpace.xl),
+            _ProfileRow(onTap: onProfile),
+            const SizedBox(height: AppSpace.lg),
             const _RemindersRow(),
             const SizedBox(height: AppSpace.xl),
             if (guest) ...[
@@ -122,6 +130,47 @@ class _AccountSheet extends StatelessWidget {
   }
 }
 
+/// "Health profile · Age 67 · Diabetes" — opens the profile form.
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return FutureBuilder<HealthProfile>(
+      future: context.read<ProfileRepository>().load(),
+      builder: (context, snapshot) => InkWell(
+        onTap: onTap,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.control)),
+        child: Row(
+          children: [
+            const Icon(Icons.favorite_border_rounded, color: AppColors.inkSecondary),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Health profile', style: text.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    snapshot.data?.summary(DateTime.now()) ?? ' ',
+                    style: text.bodyMedium?.tabular,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.inkSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RemindersRow extends StatelessWidget {
   const _RemindersRow();
 
@@ -134,11 +183,14 @@ class _RemindersRow extends StatelessWidget {
     final status = switch (state.permission) {
       ReminderPermission.granted => 'On · ${state.scheduledCount} alerts in the next 7 days',
       ReminderPermission.exactAlarmsOff => 'On, but alerts may arrive a few minutes late',
+      ReminderPermission.backgroundRestricted =>
+        'On, but battery saving may block them while the app is closed',
       ReminderPermission.notificationsOff => 'Off · turn them on from the dashboard',
       null => 'Checking…',
     };
 
-    return Row(
+    final reminders = context.read<RemindersCubit>();
+    final row = Row(
       children: [
         Icon(
           on ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
@@ -164,6 +216,31 @@ class _RemindersRow extends StatelessWidget {
                 }
               : null,
           child: const Text('Test'),
+        ),
+      ],
+    );
+    if (!state.needsAutoStart) return row;
+
+    // realme, OPPO, Xiaomi...: even with battery saving off, these phones stop
+    // an app's alarms unless "Auto launch" / "Autostart" is on for it.
+    final brand = state.deviceMaker!;
+    final name = brand.length <= 4 ? brand.toUpperCase() : brand[0].toUpperCase() + brand.substring(1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        const SizedBox(height: AppSpace.md),
+        Text(
+          'On $name phones, also turn on Auto launch (or Autostart) and allow background '
+          'activity for Pill Reminder, so reminders ring when the app is closed.',
+          style: text.bodyMedium,
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: reminders.openPhoneSettings,
+            child: const Text('Open phone settings'),
+          ),
         ),
       ],
     );

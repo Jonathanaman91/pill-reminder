@@ -19,6 +19,10 @@ enum ReminderPermission {
   /// Notifications are on, but "Alarms & reminders" is off, so Android may
   /// deliver them several minutes late.
   exactAlarmsOff,
+
+  /// Everything is allowed, but the phone's battery saving may hold the
+  /// alarms back while the app is closed (common on realme, OPPO, Xiaomi).
+  backgroundRestricted,
 }
 
 /// Sent when the user taps a reminder or its "Mark as taken" button.
@@ -42,6 +46,15 @@ abstract interface class ReminderPlatform {
   Future<ReminderPermission> permission();
   Future<bool> requestNotifications();
   Future<void> requestExactAlarms();
+
+  /// Asks Android to leave this app out of battery saving.
+  Future<void> requestBackgroundRun();
+
+  /// Opens this app's page in Android Settings (auto launch, battery...).
+  Future<void> openAppDetails();
+
+  /// The phone maker, e.g. "realme", for brand-specific advice.
+  Future<String?> deviceMaker();
   Future<void> openSettings();
   Future<void> replaceAll(List<PlannedReminder> reminders, {required bool exact});
   Future<void> cancel(int id);
@@ -58,6 +71,7 @@ class NotificationService implements ReminderPlatform {
   bool _ready = false;
 
   static const _takeAction = 'take';
+  static const _background = MethodChannel('pill_reminder/background');
   static const _channel = AndroidNotificationChannel(
     'dose_reminders',
     'Dose reminders',
@@ -134,8 +148,34 @@ class NotificationService implements ReminderPlatform {
     if (!_ready || android == null) return ReminderPermission.granted;
     if (await android.areNotificationsEnabled() == false) return ReminderPermission.notificationsOff;
     if (await android.canScheduleExactNotifications() == false) return ReminderPermission.exactAlarmsOff;
+    if (await _call<bool>('isIgnoringBatteryOptimizations') == false) {
+      return ReminderPermission.backgroundRestricted;
+    }
     return ReminderPermission.granted;
   }
+
+  /// Calls the small Android channel in MainActivity.kt. Null if it fails,
+  /// so a missing answer never blocks the reminders themselves.
+  Future<T?> _call<T>(String method) async {
+    try {
+      return await _background.invokeMethod<T>(method);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> requestBackgroundRun() async {
+    await _call<bool>('requestIgnoreBatteryOptimizations');
+  }
+
+  @override
+  Future<void> openAppDetails() async {
+    await _call<bool>('openAppSettings');
+  }
+
+  @override
+  Future<String?> deviceMaker() => _call<String>('manufacturer');
 
   /// Shows Android's "Allow notifications?" dialog. Returns false if the user
   /// said no (after two refusals Android stops showing the dialog).
@@ -182,8 +222,7 @@ class NotificationService implements ReminderPlatform {
   Future<void> replaceAll(List<PlannedReminder> reminders, {required bool exact}) async {
     if (!_ready) return;
     await _plugin.cancelAllPendingNotifications();
-    final mode =
-        exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
+    final mode = _mode(exact);
     final soon = DateTime.now().add(const Duration(seconds: 5));
     for (final r in reminders) {
       if (r.at.isBefore(soon)) continue; // the plugin refuses times in the past
@@ -224,12 +263,18 @@ class NotificationService implements ReminderPlatform {
       id: 1,
       scheduledDate: tz.TZDateTime.now(tz.local).add(delay),
       notificationDetails: _details,
-      androidScheduleMode:
-          exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: _mode(exact),
       title: 'Test reminder',
       body: 'Reminders are working. This is how a dose alert will look.',
     );
   }
+
+  /// "Alarm clock" alarms are the ones Android treats like a wake-up alarm:
+  /// they ring on the minute, even in deep sleep, and phone makers' battery
+  /// savers leave them alone far more often than ordinary exact alarms.
+  /// Without the exact-alarm permission, Android may deliver late.
+  static AndroidScheduleMode _mode(bool exact) =>
+      exact ? AndroidScheduleMode.alarmClock : AndroidScheduleMode.inexactAllowWhileIdle;
 
   DoseNotificationTap? _parse(NotificationResponse response) {
     final payload = response.payload;

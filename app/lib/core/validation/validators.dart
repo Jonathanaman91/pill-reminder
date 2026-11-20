@@ -66,6 +66,18 @@ abstract final class Validators {
     return null;
   }
 
+  /// The form typed when "Other" is chosen, e.g. "Patch" or "Nasal spray".
+  static String? formDetail(String? value) {
+    final v = value?.trim() ?? '';
+    if (v.isEmpty) return 'Type the form, e.g. Patch or Powder.';
+    if (v.length < 2) return 'Use at least 2 characters.';
+    if (v.length > 40) return 'Use 40 characters or fewer.';
+    if (!RegExp(r"^[\p{L}\p{N} .,'()/-]+$", unicode: true).hasMatch(v)) {
+      return 'Use letters, numbers and simple punctuation only.';
+    }
+    return null;
+  }
+
   static String? instructions(String? value) =>
       (value ?? '').trim().length > 255 ? 'Use 255 characters or fewer.' : null;
 }

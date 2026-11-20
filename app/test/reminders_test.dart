@@ -40,6 +40,12 @@ class _FakePlatform implements ReminderPlatform {
   @override
   Future<void> requestExactAlarms() async {}
   @override
+  Future<void> requestBackgroundRun() async {}
+  @override
+  Future<void> openAppDetails() async {}
+  @override
+  Future<String?> deviceMaker() async => null;
+  @override
   Future<void> openSettings() async {}
   @override
   Future<void> replaceAll(List<PlannedReminder> reminders, {required bool exact}) async {
@@ -82,7 +88,9 @@ class _FakeRepo implements DashboardRepository {
   @override
   Future<SyncOutcome> sync() async => SyncOutcome.synced;
   @override
-  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status) async => dose;
+  Future<TodayDose> recordDose(TodayDose dose, DoseStatus status, {String? skipReason}) async => dose;
+  @override
+  Future<List<DoseDay>> history({int days = 30}) async => const [];
   @override
   Future<void> undoDose(TodayDose dose) async {}
   @override

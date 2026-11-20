@@ -174,6 +174,7 @@ class AddMedicationCubit extends Cubit<AddMedicationState> {
     required String name,
     required double strength,
     String? instructions,
+    String? formDetail,
   }) async {
     if (state.submitting || !state.choicesValid) return false;
     emit(state.copyWith(submitting: true, saveError: () => null));
@@ -189,6 +190,7 @@ class AddMedicationCubit extends Cubit<AddMedicationState> {
         startDate: state.startDate,
         endDate: state.endDate,
         instructions: (instructions?.trim().isEmpty ?? true) ? null : instructions!.trim(),
+        formDetail: state.form == DosageForm.other ? formDetail?.trim() : null,
         photoPath: state.photoPath,
       );
       final editing = _editing;

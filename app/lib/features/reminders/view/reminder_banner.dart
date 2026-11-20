@@ -22,6 +22,13 @@ class ReminderBanner extends StatelessWidget {
           body: 'Allow notifications so your phone alerts you when a dose is due.',
           action: state.notificationsRefused ? 'Open settings' : 'Turn on',
         ),
+      ReminderPermission.backgroundRestricted => (
+          icon: Icons.battery_alert_rounded,
+          title: 'Reminders may not ring when the app is closed',
+          body: 'Your phone\u2019s battery saving can hold them back. Let Pill Reminder '
+              'run in the background.',
+          action: 'Allow',
+        ),
       ReminderPermission.exactAlarmsOff => (
           icon: Icons.alarm_off_rounded,
           title: 'Reminders may arrive late',

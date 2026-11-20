@@ -17,7 +17,9 @@ class AppDatabase {
   // v2: medications.local_photo_path (photo kept on the phone until uploaded)
   // v3: medications.deleted + schedules.deleted (a delete made on this phone,
   //     kept until the server has been told about it)
-  static const _version = 3;
+  // v4: medications.form_detail ("Other" form typed by the user) and
+  //     dose_logs.skip_reason
+  static const _version = 4;
 
   static Future<AppDatabase> open() async {
     final dir = await getDatabasesPath();
@@ -51,6 +53,10 @@ class AppDatabase {
       await db.execute('ALTER TABLE medications ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
       await db.execute('ALTER TABLE schedules ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
     }
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE medications ADD COLUMN form_detail TEXT');
+      await db.execute('ALTER TABLE dose_logs ADD COLUMN skip_reason TEXT');
+    }
   }
 
   static Future<void> _create(Database db, int version) async {
@@ -62,6 +68,7 @@ class AppDatabase {
           dosage_amount  REAL NOT NULL,
           dosage_unit    TEXT NOT NULL,
           form           TEXT NOT NULL,
+          form_detail    TEXT,                   -- e.g. "Patch" when form = other
           instructions   TEXT,
           photo_path     TEXT,                   -- server URL once uploaded
           local_photo_path TEXT,                 -- file on this phone
@@ -92,6 +99,7 @@ class AppDatabase {
           scheduled_at   INTEGER NOT NULL,       -- epoch ms
           status         TEXT NOT NULL,          -- taken | skipped | missed
           taken_at       INTEGER,
+          skip_reason    TEXT,
           updated_at     INTEGER NOT NULL,
           deleted        INTEGER NOT NULL DEFAULT 0,
           sync_state     TEXT NOT NULL DEFAULT 'pending', -- pending | synced

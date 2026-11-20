@@ -65,6 +65,7 @@ class MedicationLocalSource {
       startDate: _day.parse(m['start_date'] as String),
       endDate: m['end_date'] == null ? null : _day.parse(m['end_date'] as String),
       instructions: m['instructions'] as String?,
+      formDetail: m['form_detail'] as String?,
       photo: (m['local_photo_path'] ?? m['photo_path']) as String?,
     );
   }
@@ -180,6 +181,7 @@ class MedicationLocalSource {
         'dosage_amount': med.dosageAmount,
         'dosage_unit': med.dosageUnit,
         'form': med.form.name,
+        'form_detail': med.form == DosageForm.other ? med.formDetail?.trim() : null,
         'instructions': med.instructions,
         'start_date': _day.format(med.startDate),
         'end_date': med.endDate == null ? null : _day.format(med.endDate!),
@@ -237,6 +239,7 @@ class MedicationLocalSource {
         'dosageAmount': m['dosage_amount'],
         'dosageUnit': m['dosage_unit'],
         'form': m['form'],
+        'formDetail': m['form_detail'],
         'instructions': m['instructions'],
         'startDate': m['start_date'],
         'endDate': m['end_date'],

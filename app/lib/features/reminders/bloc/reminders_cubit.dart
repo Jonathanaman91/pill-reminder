@@ -25,6 +25,7 @@ final class RemindersState extends Equatable {
     this.permission,
     this.scheduledCount = 0,
     this.notificationsRefused = false,
+    this.deviceMaker,
     this.notice,
   });
 
@@ -37,7 +38,17 @@ final class RemindersState extends Equatable {
 
   /// The user said "Don't allow"; next time, open Settings instead of asking.
   final bool notificationsRefused;
+
+  /// Lower-case phone maker, e.g. "realme", for brand-specific advice.
+  final String? deviceMaker;
   final RemindersNotice? notice;
+
+  /// Phones whose battery savers are known to block other apps' alarms
+  /// (see dontkillmyapp.com); they need one extra setting by hand.
+  bool get needsAutoStart => const {
+        'realme', 'oppo', 'oneplus', 'xiaomi', 'redmi', 'poco', 'vivo', 'iqoo',
+        'huawei', 'honor', 'samsung', 'infinix', 'tecno', 'asus',
+      }.contains(deviceMaker);
 
   bool get needsAttention =>
       active && permission != null && permission != ReminderPermission.granted;
@@ -47,6 +58,7 @@ final class RemindersState extends Equatable {
     ReminderPermission? permission,
     int? scheduledCount,
     bool? notificationsRefused,
+    String? deviceMaker,
     RemindersNotice? notice,
   }) =>
       RemindersState(
@@ -54,11 +66,13 @@ final class RemindersState extends Equatable {
         permission: permission ?? this.permission,
         scheduledCount: scheduledCount ?? this.scheduledCount,
         notificationsRefused: notificationsRefused ?? this.notificationsRefused,
+        deviceMaker: deviceMaker ?? this.deviceMaker,
         notice: notice ?? this.notice,
       );
 
   @override
-  List<Object?> get props => [active, permission, scheduledCount, notificationsRefused, notice];
+  List<Object?> get props =>
+      [active, permission, scheduledCount, notificationsRefused, deviceMaker, notice];
 }
 
 /// Keeps the phone's scheduled alarms in step with the medication schedule.
@@ -101,6 +115,9 @@ class RemindersCubit extends Cubit<RemindersState> {
     _changesSub = _repository.changes.listen((_) => _rescheduleSoon());
     _tapsSub = _platform.taps.listen(_handleTap);
 
+    final maker = await _platform.deviceMaker();
+    if (maker != null && !isClosed) emit(state.copyWith(deviceMaker: maker.trim().toLowerCase()));
+
     final launchTap = _platform.takeLaunchTap();
     if (launchTap != null) await _handleTap(launchTap);
     await refreshPermission(forceReschedule: true);
@@ -139,6 +156,8 @@ class RemindersCubit extends Cubit<RemindersState> {
         }
       case ReminderPermission.exactAlarmsOff:
         await _platform.requestExactAlarms();
+      case ReminderPermission.backgroundRestricted:
+        await _platform.requestBackgroundRun();
       case ReminderPermission.granted:
       case null:
         break;
@@ -146,12 +165,20 @@ class RemindersCubit extends Cubit<RemindersState> {
     await refreshPermission();
   }
 
+  /// The phone's own page for this app (auto launch, battery, ...).
+  Future<void> openPhoneSettings() => _platform.openAppDetails();
+
   Future<void> sendTestReminder() async {
     if (state.permission == ReminderPermission.notificationsOff) {
       return _notify('Turn on notifications first, then try again.');
     }
-    await _platform.scheduleTest(exact: state.permission != ReminderPermission.exactAlarmsOff);
-    _notify('A test reminder will appear in about 10 seconds. You can close the app.');
+    // A minute gives time to close the app, which is the real test.
+    await _platform.scheduleTest(
+      exact: state.permission != ReminderPermission.exactAlarmsOff,
+      delay: const Duration(minutes: 1),
+    );
+    _notify('A test reminder will appear in about 1 minute. Close the app now to check it '
+        'still arrives.');
   }
 
   void _rescheduleSoon() {

@@ -7,6 +7,7 @@ import { adminRouter } from './routes/admin.routes.js';
 import { authRouter } from './routes/auth.routes.js';
 import { facilitiesRouter } from './routes/facilities.routes.js';
 import { medicationsRouter, photosRouter } from './routes/medications.routes.js';
+import { profileRouter } from './routes/profile.routes.js';
 import { syncRouter } from './routes/sync.routes.js';
 
 export function createApp() {
@@ -29,6 +30,7 @@ export function createApp() {
   app.use('/api/v1', syncRouter);
   app.use('/api/v1', medicationsRouter);
   app.use('/api/v1', facilitiesRouter);
+  app.use('/api/v1', profileRouter);
   app.use(photosRouter); // GET /uploads/<id>.jpg
 
   app.use(notFound);

@@ -38,7 +38,8 @@ syncRouter.get('/sync', requireAuth, async (req, res) => {
 
     const medications = await client.query(
       `SELECT id, catalog_id AS "catalogId", name, dosage_amount AS "dosageAmount",
-              dosage_unit AS "dosageUnit", form, instructions, photo_url AS "photoUrl",
+              dosage_unit AS "dosageUnit", form, form_detail AS "formDetail",
+              instructions, photo_url AS "photoUrl",
               start_date AS "startDate", end_date AS "endDate", stock_count AS "stockCount",
               refill_threshold AS "refillThreshold", is_active AS "isActive",
               updated_at AS "updatedAt", deleted_at AS "deletedAt"
@@ -61,6 +62,7 @@ syncRouter.get('/sync', requireAuth, async (req, res) => {
     const doseLogs = await client.query(
       `SELECT id, schedule_id AS "scheduleId", user_medication_id AS "userMedicationId",
               scheduled_at AS "scheduledAt", status, taken_at AS "takenAt",
+              skip_reason AS "skipReason",
               updated_at AS "updatedAt", deleted_at AS "deletedAt"
        FROM dose_logs
        WHERE user_id = $1 AND updated_at > $2 AND scheduled_at > now() - interval '30 days'`,
@@ -95,6 +97,7 @@ const doseLogSchema = z.object({
   scheduledAt: z.string().datetime({ offset: true }),
   status: z.enum(['taken', 'skipped', 'missed']),
   takenAt: z.string().datetime({ offset: true }).nullable(),
+  skipReason: z.string().trim().max(60).nullish(),
   updatedAt: z.string().datetime({ offset: true }),
   deleted: z.boolean().default(false),
 });
@@ -125,14 +128,16 @@ syncRouter.post('/dose-logs/batch', requireAuth, validateBody(batchSchema), asyn
       // updates the existing row instead of creating a duplicate.
       await client.query(
         `INSERT INTO dose_logs (id, user_id, schedule_id, user_medication_id, scheduled_at,
-                                status, taken_at, deleted_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8 THEN now() END)
+                                status, taken_at, deleted_at, skip_reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8 THEN now() END, $9)
          ON CONFLICT (schedule_id, scheduled_at) DO UPDATE
            SET status = EXCLUDED.status,
                taken_at = EXCLUDED.taken_at,
-               deleted_at = EXCLUDED.deleted_at`,
+               deleted_at = EXCLUDED.deleted_at,
+               skip_reason = EXCLUDED.skip_reason`,
         [log.id, userId, log.scheduleId, log.userMedicationId, log.scheduledAt,
-          log.status, log.takenAt, log.deleted],
+          log.status, log.takenAt, log.deleted,
+          log.status === 'skipped' ? (log.skipReason || null) : null],
       );
       saved += 1;
     }

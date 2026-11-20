@@ -46,6 +46,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
   final _name = TextEditingController();
   final _strength = TextEditingController();
   final _instructions = TextEditingController();
+  final _formDetail = TextEditingController(); // "Other" form, e.g. Patch
   final _picker = ImagePicker();
   bool _saved = false;
 
@@ -62,6 +63,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
       _name.text = m.name;
       _strength.text = Medication.trimNumber(m.dosageAmount);
       _instructions.text = m.instructions ?? '';
+      _formDetail.text = m.formDetail ?? '';
     }
   }
 
@@ -70,6 +72,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
     _name.dispose();
     _strength.dispose();
     _instructions.dispose();
+    _formDetail.dispose();
     super.dispose();
   }
 
@@ -80,7 +83,8 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
       return _cubit.choicesChanged ||
           _name.text.trim() != m.name ||
           Validators.parseAmount(_strength.text) != m.dosageAmount ||
-          _instructions.text.trim() != (m.instructions ?? '');
+          _instructions.text.trim() != (m.instructions ?? '') ||
+          _formDetail.text.trim() != (m.formDetail ?? '');
     }
     final s = _cubit.state;
     return _name.text.isNotEmpty ||
@@ -240,6 +244,7 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
       name: _name.text,
       strength: Validators.parseAmount(_strength.text)!,
       instructions: _instructions.text,
+      formDetail: _formDetail.text,
     );
     if (!ok || !mounted) return;
 
@@ -341,6 +346,30 @@ class _AddMedicationFormState extends State<_AddMedicationForm> {
                       ),
                   ],
                 ),
+              ),
+
+              // "Other" means something different for every medicine, so ask what.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                alignment: Alignment.topCenter,
+                child: state.form != DosageForm.other
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: AppSpace.md),
+                        child: TextFormField(
+                          controller: _formDetail,
+                          autofocus: _editing == null,
+                          textCapitalization: TextCapitalization.sentences,
+                          textInputAction: TextInputAction.next,
+                          maxLength: 40,
+                          validator: Validators.formDetail,
+                          decoration: const InputDecoration(
+                            labelText: 'What form is it?',
+                            hintText: 'e.g. Patch, Powder, Nasal spray',
+                            counterText: '',
+                          ),
+                        ),
+                      ),
               ),
 
               _Section(

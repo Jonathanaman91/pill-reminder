@@ -401,6 +401,97 @@ adminRouter.delete('/catalog/:id', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/analytics — who uses the app and how well it works, as counts
+// across all users. No row here can be traced back to one person: it shows
+// how many users are in each group, never which users.
+// ---------------------------------------------------------------------------
+const AGE_GROUPS = ['Under 18', '18–29', '30–44', '45–59', '60–74', '75+', 'Not given'];
+
+adminRouter.get('/analytics', async (req, res) => {
+  const patients = "role = 'user'";
+  const [ages, genders, conditions, signups, adherence, adherenceByAge, skips, forms, active] =
+    await Promise.all([
+      query(`
+        SELECT CASE
+                 WHEN date_of_birth IS NULL THEN 'Not given'
+                 WHEN a < 18 THEN 'Under 18' WHEN a < 30 THEN '18–29' WHEN a < 45 THEN '30–44'
+                 WHEN a < 60 THEN '45–59' WHEN a < 75 THEN '60–74' ELSE '75+' END AS label,
+               count(*)::int AS count
+        FROM (SELECT date_of_birth, date_part('year', age(date_of_birth)) AS a
+              FROM users WHERE ${patients}) u
+        GROUP BY 1`),
+      query(`SELECT COALESCE(gender, 'unknown') AS label, count(*)::int AS count
+             FROM users WHERE ${patients} GROUP BY 1`),
+      // "asthma" and "Asthma" are one condition; show the most common spelling.
+      query(`SELECT mode() WITHIN GROUP (ORDER BY c) AS label, count(DISTINCT u.id)::int AS count
+             FROM users u, unnest(u.conditions) AS c
+             WHERE ${patients}
+             GROUP BY lower(c) ORDER BY count DESC, label LIMIT 10`),
+      query(`SELECT to_char(w, 'DD Mon') AS label,
+                    (SELECT count(*)::int FROM users
+                     WHERE ${patients} AND created_at >= w AND created_at < w + interval '7 days') AS count
+             FROM generate_series(date_trunc('week', now()) - interval '7 weeks',
+                                  date_trunc('week', now()), interval '1 week') AS w
+             ORDER BY w`),
+      query(`SELECT to_char(d, 'DD Mon') AS label,
+                    count(l.id) FILTER (WHERE l.status = 'taken')::int AS taken,
+                    count(l.id)::int AS logged
+             FROM generate_series(current_date - 13, current_date, interval '1 day') AS d
+             LEFT JOIN dose_logs l ON l.deleted_at IS NULL
+               AND l.scheduled_at >= d AND l.scheduled_at < d + interval '1 day'
+             GROUP BY d ORDER BY d`),
+      query(`SELECT CASE
+                      WHEN u.date_of_birth IS NULL THEN 'Not given'
+                      WHEN a < 18 THEN 'Under 18' WHEN a < 30 THEN '18–29' WHEN a < 45 THEN '30–44'
+                      WHEN a < 60 THEN '45–59' WHEN a < 75 THEN '60–74' ELSE '75+' END AS label,
+                    count(*) FILTER (WHERE l.status = 'taken')::int AS taken,
+                    count(*)::int AS logged
+             FROM dose_logs l
+             JOIN (SELECT id, date_of_birth, date_part('year', age(date_of_birth)) AS a FROM users) u
+               ON u.id = l.user_id
+             WHERE l.deleted_at IS NULL AND l.scheduled_at > now() - interval '30 days'
+             GROUP BY 1`),
+      query(`SELECT COALESCE(skip_reason, 'No reason given') AS label, count(*)::int AS count
+             FROM dose_logs
+             WHERE status = 'skipped' AND deleted_at IS NULL AND scheduled_at > now() - interval '30 days'
+             GROUP BY 1 ORDER BY count DESC`),
+      query(`SELECT form AS label, count(*)::int AS count FROM user_medications
+             WHERE deleted_at IS NULL GROUP BY 1 ORDER BY count DESC`),
+      query(`SELECT
+               (SELECT count(*)::int FROM users WHERE ${patients}) AS users,
+               (SELECT count(DISTINCT user_id)::int FROM dose_logs
+                 WHERE deleted_at IS NULL AND scheduled_at > now() - interval '7 days') AS active_7d,
+               (SELECT count(*)::int FROM users
+                 WHERE ${patients} AND (date_of_birth IS NOT NULL OR cardinality(conditions) > 0)) AS with_profile`),
+    ]);
+
+  // Always list every age group, in order, even when a group is empty.
+  const byLabel = (rows) => new Map(rows.map((r) => [r.label, r]));
+  const ageCounts = byLabel(ages.rows);
+  const ageAdherence = byLabel(adherenceByAge.rows);
+  const rate = (r) => (r && r.logged > 0 ? Math.round((r.taken / r.logged) * 100) : null);
+
+  res.json({
+    totals: {
+      users: active.rows[0].users,
+      active7d: active.rows[0].active_7d,
+      withProfile: active.rows[0].with_profile,
+    },
+    ageGroups: AGE_GROUPS.map((label) => ({
+      label,
+      count: ageCounts.get(label)?.count ?? 0,
+      adherence: rate(ageAdherence.get(label)),
+    })),
+    genders: genders.rows,
+    conditions: conditions.rows,
+    signupsPerWeek: signups.rows,
+    adherencePerDay: adherence.rows.map((r) => ({ label: r.label, taken: r.taken, logged: r.logged, rate: rate(r) })),
+    skipReasons: skips.rows,
+    medicationForms: forms.rows,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /admin/activity?page=&pageSize= — the audit trail, newest first
 // ---------------------------------------------------------------------------
 adminRouter.get('/activity', async (req, res) => {

@@ -9,6 +9,8 @@ import 'package:pill_reminder/features/dashboard/data/dashboard_local_source.dar
 import 'package:pill_reminder/features/dashboard/domain/today_dose.dart';
 import 'package:pill_reminder/features/medications/data/medication_local_source.dart';
 import 'package:pill_reminder/features/medications/domain/medication.dart';
+import 'package:pill_reminder/features/profile/data/profile_repository.dart';
+import 'package:pill_reminder/features/profile/domain/health_profile.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 NewMedication _metformin({
@@ -229,5 +231,78 @@ void main() {
     expect((await dashboard.loadSnapshot(noon)).doses.single.name, 'Aspirin');
     await local.softDelete('old-1', noon);
     expect(await local.all(), isEmpty);
+  });
+
+  test('an "Other" form keeps the text the user typed', () async {
+    final id = await local.insert(
+      NewMedication(
+        name: 'Nicotine',
+        form: DosageForm.other,
+        formDetail: ' Patch ',
+        dosageAmount: 21,
+        dosageUnit: 'mg',
+        quantity: 1,
+        times: const [ClockTime(8, 0)],
+        daysMask: WeekDays.everyDay,
+        startDate: DateTime(2026, 11, 1),
+      ),
+      noon,
+    );
+    final saved = (await local.all()).single;
+    expect(saved.formDetail, 'Patch');
+    expect(saved.detailLabel, 'Patch · 21 mg');
+    expect((await local.pendingForUpload()).single['formDetail'], 'Patch');
+    expect((await dashboard.loadSnapshot(noon)).doses.single.detailLabel, 'Patch · 21 mg');
+
+    // Switching to a normal form drops the typed text.
+    await local.update(id, _metformin(name: 'Nicotine'), noon);
+    expect((await local.all()).single.formDetail, isNull);
+  });
+
+  test('a skipped dose keeps its reason, and it is uploaded', () async {
+    await local.insert(_metformin(), noon);
+    final morning = (await dashboard.loadSnapshot(noon)).doses.first;
+    final saved = await dashboard.saveDoseStatus(morning, DoseStatus.skipped, noon,
+        skipReason: 'Ran out of medicine');
+    expect(saved.skipReason, 'Ran out of medicine');
+    expect((await dashboard.loadSnapshot(noon)).doses.first.skipReason, 'Ran out of medicine');
+    expect((await dashboard.pendingDoseLogs()).single['skip_reason'], 'Ran out of medicine');
+
+    // Changing it to taken clears the reason.
+    await dashboard.saveDoseStatus(morning, DoseStatus.taken, noon, skipReason: 'ignored');
+    expect((await dashboard.loadSnapshot(noon)).doses.first.skipReason, isNull);
+  });
+
+  test('history lists past days; unmarked doses count as missed', () async {
+    await local.insert(_metformin(), noon); // started 1 Nov, 08:00 and 20:00
+    final yesterday8 = DateTime(2026, 11, 11, 8);
+    final dose = (await dashboard.upcomingDoses(DateTime(2026, 11, 11, 7)))
+        .firstWhere((d) => d.scheduledAt == yesterday8);
+    await dashboard.saveDoseStatus(dose, DoseStatus.taken, yesterday8);
+
+    final days = await dashboard.history(noon, days: 3);
+    expect(days.map((d) => d.day), [DateTime(2026, 11, 11), DateTime(2026, 11, 10), DateTime(2026, 11, 9)]);
+    expect(days.first.doses.map((d) => d.status), [DoseStatus.taken, DoseStatus.missed]);
+    expect(days.last.doses.every((d) => d.status == DoseStatus.missed), isTrue);
+  });
+
+  test('the health profile is stored on the phone and marked for upload', () async {
+    final store = ProfileLocalStore(database);
+    expect(await store.read(), HealthProfile.empty);
+    final profile = HealthProfile(
+      dateOfBirth: DateTime(1958, 4, 12),
+      gender: Gender.female,
+      conditions: const ['Diabetes'],
+      allergies: 'Penicillin',
+    );
+    await store.write(profile, pending: true);
+    expect(await store.read(), profile);
+    expect(await store.isPending(), isTrue);
+    expect(profile.ageOn(noon), 68);
+    expect(profile.summary(noon), 'Age 68 · Diabetes');
+
+    // Logging out wipes it with everything else.
+    await database.clearAll();
+    expect(await store.read(), HealthProfile.empty);
   });
 }
